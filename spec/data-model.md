@@ -1,0 +1,81 @@
+# データ設計（Firestore）
+
+## コレクション構成
+```
+users/{userId}
+users/{userId}/walks/{walkId}
+users/{userId}/walks/{walkId}/locations/{batchId}
+users/{userId}/walks/{walkId}/suggests/{suggestId}
+users/{userId}/walks/{walkId}/chat/{chatId}
+```
+
+## ER図（概念）
+```mermaid
+erDiagram
+  USER ||--o{ WALK : has
+  WALK ||--o{ LOCATION_BATCH : stores
+  WALK ||--o{ SUGGEST : proposes
+  WALK ||--o{ CHAT_MESSAGE : logs
+```
+
+## ドキュメント定義
+
+### users/{userId}
+- `nickname` string
+- `email` string
+- `fcmToken` string?（プッシュ通知用）
+- `createdAt` timestamp
+- `lastLoginAt` timestamp
+
+### users/{userId}/walks/{walkId}
+- `status` string (`active` / `finished`)
+- `startedAt` timestamp
+- `finishedAt` timestamp?
+- `startLocation` geopoint
+- `lastSuggestionAt` timestamp?
+- `suggestCount` number
+
+### users/{userId}/walks/{walkId}/locations/{batchId}
+- `points` array
+  - `timestamp` timestamp
+  - `geo` geopoint
+- `createdAt` timestamp
+
+> 1ドキュメントの上限を超えないよう、`points` は 50〜100 件程度を目安に分割する。
+
+### users/{userId}/walks/{walkId}/suggests/{suggestId}
+- `suggestId` string
+- `suggestedAt` timestamp
+- `messageId` string（chat 参照）
+- `geo` geopoint
+- `status` string (`sent` / `failed`)
+
+### users/{userId}/walks/{walkId}/chat/{chatId}
+- `chatId` string
+- `senderType` string (`system` / `user`)
+- `message` string
+- `url` string?
+- `createdAt` timestamp
+- `suggestId` string?
+
+## ID運用
+- `walkId` / `suggestId`: 時系列ソート可能なID（例: ULID）
+- `chatId`: `timestamp-short-uuid` 形式
+- `batchId`: `timestamp-short-uuid` 形式
+
+## インデックス（推奨）
+- `walks` を `startedAt desc` で取得
+- `walks` を `status` でフィルタ
+- `suggests` を `suggestedAt desc` で取得
+- `chat` を `createdAt asc` で取得
+
+## 保持/削除
+- 位置情報は散歩中のみ取得し、ユーザーの削除要求で全消去できるようにする
+- 不要な詳細履歴は一定期間後に削除できる設計とする（例: 90日）
+
+---
+
+## 関連ドキュメント
+- → [API設計](./api.md): REST エンドポイント
+- → [システム構成](./system.md): アーキテクチャ全体像
+- → [UX仕様](./ux.md): 画面とユーザーフロー

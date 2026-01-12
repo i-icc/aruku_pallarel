@@ -1,0 +1,42 @@
+name: Flutter Analyze
+
+on:
+  pull_request:
+    paths:
+      - "src/frontend/aruku_pallarel/**"
+      - ".github/workflows/flutter-analyze.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install FVM
+        run: dart pub global activate fvm
+
+      - name: Add Pub Cache to PATH
+        run: echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Install Flutter (stable)
+        run: fvm install stable
+
+      - name: Set Global Flutter (stable)
+        run: fvm global stable
+
+      - name: Flutter Pub Get
+        run: fvm flutter pub get
+        working-directory: src/frontend/aruku_pallarel
+
+      - name: Flutter Analyze
+        run: fvm flutter analyze
+        working-directory: src/frontend/aruku_pallarel

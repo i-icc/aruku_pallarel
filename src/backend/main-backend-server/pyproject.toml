@@ -1,0 +1,15 @@
+[project]
+name = "machi-danjon-backend"
+version = "0.1.0"
+description = "Backend API server for machi-danjon."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0.3",
+    "firebase-admin>=6.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]

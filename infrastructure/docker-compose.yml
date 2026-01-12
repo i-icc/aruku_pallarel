@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: ../src/backend/main-backend-server
+    env_file:
+      - ../src/backend/main-backend-server/.env.local
+    ports:
+      - "8000:8080"
+    depends_on:
+      - firebase
+      - tasks-stub
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  tasks-stub:
+    build:
+      context: ../src/tasks_stub
+    environment:
+      - PORT=7070
+    ports:
+      - "7070:7070"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7070/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  firebase:
+    build:
+      context: ./firebase
+    working_dir: /workspace
+    command: >
+      firebase emulators:start --only firestore,auth
+      --project ${FIREBASE_PROJECT_ID:-demo-project}
+      --config /workspace/firebase.json
+      --import /workspace/data
+      --export-on-exit /workspace/data
+    volumes:
+      - ./firebase:/workspace
+    ports:
+      - "8080:8080"
+      - "9099:9099"
+      - "4000:4000"
