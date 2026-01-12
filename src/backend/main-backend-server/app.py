@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from firebase_admin import firestore
 from flask import Blueprint, Flask, jsonify, request
@@ -39,6 +40,17 @@ def to_rfc3339(timestamp):
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
     return timestamp.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_start_location(payload):
+    location = payload.get("startLocation")
+    if not isinstance(location, dict):
+        return None
+    lat = location.get("lat")
+    lon = location.get("lon")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return None
+    return firestore.GeoPoint(lat, lon)
 
 
 @api_v1.post("/users")
@@ -132,6 +144,77 @@ def delete_me():
     delete_document_recursive(doc_ref)
 
     return jsonify(result="ok")
+
+
+@api_v1.post("/walks")
+@require_auth
+def start_walk():
+    payload = request.get_json(silent=True) or {}
+    start_location = parse_start_location(payload)
+    if start_location is None:
+        return error_response("INVALID_ARGUMENT", "startLocation is required", 400)
+
+    user_id = current_user_id()
+    now = datetime.now(timezone.utc)
+    walk_id = uuid4().hex
+
+    db = firebase_client.get_firestore_client()
+    walks_ref = db.collection("users").document(user_id).collection("walks")
+    walk_ref = walks_ref.document(walk_id)
+    transaction = db.transaction()
+
+    active_query = walks_ref.where("status", "==", "active").limit(1)
+    active_snapshots = list(active_query.stream(transaction=transaction))
+    if active_snapshots:
+        if hasattr(transaction, "rollback"):
+            transaction.rollback()
+        return error_response("WALK_ALREADY_ACTIVE", "Walk already active", 409)
+
+    transaction.set(
+        walk_ref,
+        {
+            "status": "active",
+            "startedAt": firestore.SERVER_TIMESTAMP,
+            "startLocation": start_location,
+            "suggestCount": 0,
+        },
+    )
+    transaction.commit()
+
+    return jsonify(
+        walkId=walk_id,
+        status="active",
+        startedAt=to_rfc3339(now),
+    )
+
+
+@api_v1.post("/walks/<walk_id>:finish")
+@require_auth
+def finish_walk(walk_id):
+    user_id = current_user_id()
+    now = datetime.now(timezone.utc)
+
+    db = firebase_client.get_firestore_client()
+    walk_ref = (
+        db.collection("users").document(user_id).collection("walks").document(walk_id)
+    )
+    snapshot = walk_ref.get()
+    if not snapshot.exists:
+        return error_response("WALK_NOT_FOUND", "Walk not found", 404)
+
+    walk_ref.set(
+        {
+            "status": "finished",
+            "finishedAt": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+
+    return jsonify(
+        walkId=walk_id,
+        status="finished",
+        finishedAt=to_rfc3339(now),
+    )
 
 
 @app.get("/")
