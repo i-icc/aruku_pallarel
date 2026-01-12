@@ -33,9 +33,9 @@
 - 025: Backend テストを GitHub Actions で実行する
 - 026: Backend CI の setup-uv 警告を解消する
 - 027: Backend 構造整理と ADC 設定
+- 028: Flutter アプリ基盤の整備（Riverpod / auto_route）
 
 ## 未着手(優先順位順)
-- 028: Flutter アプリ基盤の整備（Riverpod / auto_route）
 - 029: 認証後のプロフィール取得と Backend 連携
 - 030: 散歩開始/終了の UI と Backend 連携
 - 031: 散歩中マップ画面と現在地表示
@@ -48,4 +48,4 @@
 
 ## 最終更新
 最終更新日: 2026-01-12
-前回完了タスク: 027
+前回完了タスク: 028
