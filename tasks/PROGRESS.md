@@ -25,16 +25,18 @@
 - 017: Firebase ID Token 検証ミドルウェアの追加
 - 018: Users 作成/取得 API の実装
 - 019: Users 更新/削除 API の実装
+- 020: Walks 開始/終了 API の実装
+- 021: 提案リクエスト API（Cloud Tasks スタブ連携）
 - 022: Backend/ADK サーバーの配置見直し
 - 023: Backend を uv で起動できるようにする
 - 024: Backend/ADK を uv + Docker 前提で再整備
 - 025: Backend テストを GitHub Actions で実行する
 - 026: Backend CI の setup-uv 警告を解消する
+- 027: Backend 構造整理と ADC 設定
 
 ## 未着手(優先順位順)
-- 020: Walks 開始/終了 API の実装
-- 021: 提案リクエスト API（Cloud Tasks スタブ連携）
+- なし
 
 ## 最終更新
 最終更新日: 2026-01-12
-前回完了タスク: 026
+前回完了タスク: 027
