@@ -23,5 +23,6 @@
 - ローカルの Backend/Emulator/Tasks スタブは `infrastructure/docker-compose.yml` を使用する
 - Backend/ADK は `uv` で依存管理し、起動・開発は Docker Compose を優先する
 - Backend/ADK の `pyproject.toml`/`README.md` は各ディレクトリで独立管理する
+- Backend エミュレーター利用時は ADC を用意し、`GOOGLE_APPLICATION_CREDENTIALS` と gcloud 設定のマウントを行う
 - Flutter/Dart のコマンドは必ず `fvm` 経由で実行する（例: `fvm flutter`, `fvm dart`）
 - バグ修正時は `tasks/` にチケットを起票してから対応する

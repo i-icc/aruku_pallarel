@@ -4,6 +4,8 @@ services:
       context: ../src/backend/main-backend-server
     env_file:
       - ../src/backend/main-backend-server/.env.local
+    volumes:
+      - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
     ports:
       - "8000:8080"
     depends_on:

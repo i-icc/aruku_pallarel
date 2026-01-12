@@ -136,6 +136,19 @@ class FakeCollection:
 class FakeTransaction:
     def __init__(self, client):
         self._client = client
+        self._write_pbs = []
+        self._read_only = False
+        self._max_attempts = 1
+        self._id = None
+        self._in_progress = False
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def in_progress(self):
+        return self._in_progress
 
     def get(self, target):
         if isinstance(target, FakeQuery):
@@ -145,12 +158,30 @@ class FakeTransaction:
         raise TypeError("Unsupported target for transaction.get")
 
     def set(self, doc_ref, data, merge=False):
+        self._write_pbs.append((doc_ref, data))
         doc_ref.set(data, merge=merge)
 
     def commit(self):
-        return []
+        return self._commit()
 
     def rollback(self):
+        return self._rollback()
+
+    def _clean_up(self):
+        self._id = None
+        self._in_progress = False
+        self._write_pbs = []
+
+    def _begin(self, retry_id=None):
+        self._id = retry_id or b"fake-transaction"
+        self._in_progress = True
+
+    def _commit(self):
+        self._in_progress = False
+        return []
+
+    def _rollback(self):
+        self._in_progress = False
         return None
 
 

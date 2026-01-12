@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+import api.walks as walks_api
 import firebase_client
 
 
@@ -116,3 +117,90 @@ def test_walks_finish_requires_existing_walk(client, fake_firestore, monkeypatch
 
     assert response.status_code == 404
     assert response.json["error"]["code"] == "WALK_NOT_FOUND"
+
+
+def test_walks_suggestions_request_enqueues(client, fake_firestore, monkeypatch):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123", "email": "test@example.com"},
+    )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    calls = []
+
+    class FakeQueue:
+        def enqueue_suggestion(self, payload):
+            calls.append(payload)
+            return True
+
+    monkeypatch.setattr(walks_api, "_tasks_queue", lambda: FakeQueue())
+
+    fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
+        "status": "active",
+        "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+    }
+
+    response = client.post(
+        "/v1/walks/walk-1/suggestions:request",
+        json={"requestedAt": "2026-01-12T00:00:00Z"},
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["result"] == "ok"
+    assert response.json["reason"] is None
+    assert calls
+    assert calls[0]["walkId"] == "walk-1"
+    assert fake_firestore._store[("users", "user-123", "walks", "walk-1")][
+        "lastSuggestionAt"
+    ] == datetime(2026, 1, 12, tzinfo=timezone.utc)
+
+
+def test_walks_suggestions_request_cooldown(client, fake_firestore, monkeypatch):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123", "email": "test@example.com"},
+    )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    called = {"count": 0}
+
+    class FakeQueue:
+        def enqueue_suggestion(self, payload):
+            called["count"] += 1
+            return True
+
+    monkeypatch.setattr(walks_api, "_tasks_queue", lambda: FakeQueue())
+
+    last_time = datetime.now(timezone.utc) - timedelta(minutes=3)
+    fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
+        "status": "active",
+        "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+        "lastSuggestionAt": last_time,
+    }
+
+    response = client.post(
+        "/v1/walks/walk-1/suggestions:request",
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["result"] == "ng"
+    assert response.json["reason"] == "cooldown"
+    assert called["count"] == 0
+    assert (
+        fake_firestore._store[("users", "user-123", "walks", "walk-1")][
+            "lastSuggestionAt"
+        ]
+        == last_time
+    )
