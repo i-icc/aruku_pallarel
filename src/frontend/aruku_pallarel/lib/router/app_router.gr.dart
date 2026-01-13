@@ -6,7 +6,7 @@ abstract class _$AppRouter extends RootStackRouter {
   _$AppRouter({super.navigatorKey});
 
   @override
-  final Map<String, PageFactory> pagesMap = {
+  Map<String, PageFactory> get pagesMap => {
     LoginRoute.name: (routeData) {
       return AutoRoutePage<dynamic>(
         routeData: routeData,
@@ -61,7 +61,10 @@ class LoginRoute extends PageRouteInfo<void> {
 
   static const String name = 'LoginRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const LoginScreen(),
+  );
 }
 
 class BaseRoute extends PageRouteInfo<void> {
@@ -73,7 +76,10 @@ class BaseRoute extends PageRouteInfo<void> {
 
   static const String name = 'BaseRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const BaseScreen(),
+  );
 }
 
 class HomeRoute extends PageRouteInfo<void> {
@@ -85,7 +91,10 @@ class HomeRoute extends PageRouteInfo<void> {
 
   static const String name = 'HomeRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const HomeScreen(),
+  );
 }
 
 class WalkRoute extends PageRouteInfo<void> {
@@ -97,7 +106,10 @@ class WalkRoute extends PageRouteInfo<void> {
 
   static const String name = 'WalkRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const WalkScreen(),
+  );
 }
 
 class HistoryRoute extends PageRouteInfo<void> {
@@ -109,7 +121,10 @@ class HistoryRoute extends PageRouteInfo<void> {
 
   static const String name = 'HistoryRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const HistoryScreen(),
+  );
 }
 
 class SettingsRoute extends PageRouteInfo<void> {
@@ -121,7 +136,10 @@ class SettingsRoute extends PageRouteInfo<void> {
 
   static const String name = 'SettingsRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const SettingsScreen(),
+  );
 }
 
 class ChatRoute extends PageRouteInfo<void> {
@@ -133,5 +151,8 @@ class ChatRoute extends PageRouteInfo<void> {
 
   static const String name = 'ChatRoute';
 
-  static const PageInfo<void> page = PageInfo<void>(name);
+  static const PageInfo page = PageInfo(
+    name,
+    builder: (data) => const ChatScreen(),
+  );
 }
