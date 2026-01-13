@@ -2,21 +2,25 @@ import 'package:auto_route/auto_route.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../env/env.dart';
+import '../../features/authentication/provider/user_profile_provider.dart';
+import '../../features/share/services/backend_exception.dart';
 import '../../router/app_router.dart';
 
 @RoutePage()
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController(text: 'test@example.com');
   final _passwordController = TextEditingController(text: 'password123');
+  final _nicknameController = TextEditingController();
   bool _isLoading = false;
   String? _error;
 
@@ -36,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signIn() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final nickname = _resolveNickname();
 
     setState(() {
       _isLoading = true;
@@ -47,6 +52,9 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+      await ref
+          .read(userProfileNotifierProvider.notifier)
+          .refreshProfile(fallbackNickname: nickname);
       if (!mounted) {
         return;
       }
@@ -54,6 +62,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } on FirebaseAuthException catch (error) {
       setState(() {
         _error = error.message ?? 'Login failed.';
+      });
+    } on BackendException catch (error) {
+      setState(() {
+        _error = error.message;
       });
     }
     if (!mounted) {
@@ -67,6 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signUp() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final nickname = _resolveNickname();
 
     setState(() {
       _isLoading = true;
@@ -78,6 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+      await ref
+          .read(userProfileNotifierProvider.notifier)
+          .refreshProfile(fallbackNickname: nickname);
       if (!mounted) {
         return;
       }
@@ -85,6 +101,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } on FirebaseAuthException catch (error) {
       setState(() {
         _error = error.message ?? 'Sign up failed.';
+      });
+    } on BackendException catch (error) {
+      setState(() {
+        _error = error.message;
       });
     }
 
@@ -101,7 +121,21 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _nicknameController.dispose();
     super.dispose();
+  }
+
+  String _resolveNickname() {
+    final nickname = _nicknameController.text.trim();
+    if (nickname.isNotEmpty) {
+      return nickname;
+    }
+    final email = _emailController.text.trim();
+    final atIndex = email.indexOf('@');
+    if (atIndex > 0) {
+      return email.substring(0, atIndex);
+    }
+    return 'user';
   }
 
   @override
@@ -119,6 +153,13 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _emailController,
               decoration: const InputDecoration(labelText: 'Email'),
               keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nicknameController,
+              decoration: const InputDecoration(
+                labelText: 'Nickname (Sign Up)',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(

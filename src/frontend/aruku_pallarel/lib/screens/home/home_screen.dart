@@ -4,6 +4,12 @@ import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../features/authentication/provider/user_profile_provider.dart';
+import '../../features/share/services/backend_exception.dart';
+import '../../features/walk/provider/active_walk_provider.dart';
+import '../../router/app_router.dart';
 
 @RoutePage()
 class HomeScreen extends StatelessWidget {
@@ -15,16 +21,17 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _HomeScreenBody extends StatefulWidget {
+class _HomeScreenBody extends ConsumerStatefulWidget {
   const _HomeScreenBody();
 
   @override
-  State<_HomeScreenBody> createState() => _HomeScreenBodyState();
+  ConsumerState<_HomeScreenBody> createState() => _HomeScreenBodyState();
 }
 
-class _HomeScreenBodyState extends State<_HomeScreenBody> {
+class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
   String _firestoreStatus = 'pending';
   bool _loading = false;
+  bool _walkLoading = false;
 
   @override
   void initState() {
@@ -69,8 +76,46 @@ class _HomeScreenBodyState extends State<_HomeScreenBody> {
     }
   }
 
+  Future<void> _startWalk() async {
+    setState(() {
+      _walkLoading = true;
+    });
+
+    try {
+      const fallbackLat = 35.681236;
+      const fallbackLon = 139.767125;
+      await ref.read(activeWalkNotifierProvider.notifier).startWalk(
+            lat: fallbackLat,
+            lon: fallbackLon,
+          );
+      if (!mounted) {
+        return;
+      }
+      await context.router.push(const WalkRoute());
+    } on BackendException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final message = error.code == 'WALK_ALREADY_ACTIVE'
+          ? 'Walk already active.'
+          : error.message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _walkLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final profile = ref.watch(userProfileNotifierProvider);
+    final activeWalk = ref.watch(activeWalkNotifierProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
@@ -85,6 +130,32 @@ class _HomeScreenBodyState extends State<_HomeScreenBody> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
+            profile.when(
+              data: (value) {
+                if (value == null) {
+                  return const Text('Nickname: -');
+                }
+                return Text('Nickname: ${value.nickname}');
+              },
+              loading: () => const Text('Nickname: loading...'),
+              error: (error, _) => Text('Nickname: error (${error.toString()})'),
+            ),
+            const SizedBox(height: 12),
+            if (activeWalk != null) ...[
+              Text('Active Walk: ${activeWalk.walkId}'),
+              const SizedBox(height: 12),
+            ],
+            ElevatedButton(
+              onPressed: _walkLoading ? null : _startWalk,
+              child: _walkLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Start Walk'),
+            ),
+            const SizedBox(height: 12),
             Text('Firestore: $_firestoreStatus'),
             const SizedBox(height: 12),
             ElevatedButton(
