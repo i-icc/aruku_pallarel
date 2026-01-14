@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'app_theme_provider.g.dart';
 
 @Riverpod(keepAlive: true)
-ThemeData appTheme(AppThemeRef ref) {
+ThemeData appTheme(Ref ref) {
   return ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),

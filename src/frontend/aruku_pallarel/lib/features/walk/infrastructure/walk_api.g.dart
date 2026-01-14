@@ -6,7 +6,7 @@ part of 'walk_api.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$walkApiHash() => r'cd9cd0e92c6a4556cea0dd1fbd5fe046e3b7be7b';
+String _$walkApiHash() => r'b10cdae0e5f971c5dee5bc5eb4a0accc8557de50';
 
 /// See also [walkApi].
 @ProviderFor(walkApi)

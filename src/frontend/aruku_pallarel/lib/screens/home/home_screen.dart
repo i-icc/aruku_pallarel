@@ -103,12 +103,11 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
         SnackBar(content: Text(message)),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _walkLoading = false;
+        });
       }
-      setState(() {
-        _walkLoading = false;
-      });
     }
   }
 

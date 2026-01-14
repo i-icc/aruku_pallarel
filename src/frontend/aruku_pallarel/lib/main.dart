@@ -23,7 +23,7 @@ class MyApp extends HookConsumerWidget {
 
     return initialization.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => _buildApp(appRouter, theme, ref),
+      error: (error, _) => _buildApp(appRouter, theme, ref),
       data: (_) => _buildApp(appRouter, theme, ref),
     );
   }

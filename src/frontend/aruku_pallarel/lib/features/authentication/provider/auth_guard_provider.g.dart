@@ -6,7 +6,7 @@ part of 'auth_guard_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$authGuardHash() => r'23a81146018c21953be5f7c0ada672a860fd2e95';
+String _$authGuardHash() => r'1b3fab57b9f0ee9b9cabc67fca69f5a87eb52ec6';
 
 /// See also [authGuard].
 @ProviderFor(authGuard)

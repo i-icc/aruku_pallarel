@@ -6,7 +6,7 @@ part of 'dio_client_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$dioClientHash() => r'5d60c528f758429220fc2cb5ebefd3bcba976240';
+String _$dioClientHash() => r'beaacbfbc881abfdec2702890beea14d44538e26';
 
 /// See also [dioClient].
 @ProviderFor(dioClient)
@@ -24,7 +24,7 @@ final dioClientProvider = Provider<Dio>.internal(
 // ignore: unused_element
 typedef DioClientRef = ProviderRef<Dio>;
 String _$authTokenInterceptorHash() =>
-    r'58db697f9abce4ac93036f864af024da9d86a129';
+    r'22e294efd02e43e6b0e833cbcb410de439f8c219';
 
 /// See also [authTokenInterceptor].
 @ProviderFor(authTokenInterceptor)

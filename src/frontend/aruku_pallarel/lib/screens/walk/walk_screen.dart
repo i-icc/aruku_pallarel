@@ -35,12 +35,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         SnackBar(content: Text(error.message)),
       );
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _finishLoading = false;
+        });
       }
-      setState(() {
-        _finishLoading = false;
-      });
     }
   }
 

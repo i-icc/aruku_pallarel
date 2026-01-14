@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../share/provider/dio_client_provider.dart';
@@ -48,6 +49,6 @@ class WalkApi {
 }
 
 @Riverpod(keepAlive: true)
-WalkApi walkApi(WalkApiRef ref) {
+WalkApi walkApi(Ref ref) {
   return WalkApi(ref.read(dioClientProvider));
 }

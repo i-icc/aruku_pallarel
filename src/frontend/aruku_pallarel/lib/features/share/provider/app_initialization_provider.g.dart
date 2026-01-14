@@ -7,7 +7,7 @@ part of 'app_initialization_provider.dart';
 // **************************************************************************
 
 String _$appInitializationFutureHash() =>
-    r'e1a60f84095f5ab6e08740632b03aa820e370e9f';
+    r'3dd7cb4196b9eeea822d8d18ce3d52752f32e11e';
 
 /// See also [appInitializationFuture].
 @ProviderFor(appInitializationFuture)

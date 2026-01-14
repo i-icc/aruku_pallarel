@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../share/provider/dio_client_provider.dart';
@@ -43,6 +44,6 @@ class UserApi {
 }
 
 @Riverpod(keepAlive: true)
-UserApi userApi(UserApiRef ref) {
+UserApi userApi(Ref ref) {
   return UserApi(ref.read(dioClientProvider));
 }

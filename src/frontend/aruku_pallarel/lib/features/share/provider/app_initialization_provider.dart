@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../env/env.dart';
@@ -10,7 +11,7 @@ import '../../../env/env.dart';
 part 'app_initialization_provider.g.dart';
 
 @Riverpod(keepAlive: true)
-Future<void> appInitializationFuture(AppInitializationFutureRef ref) async {
+Future<void> appInitializationFuture(Ref ref) async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(
       options: FirebaseOptions(

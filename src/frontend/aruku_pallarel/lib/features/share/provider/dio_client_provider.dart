@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../env/env.dart';
@@ -7,7 +8,7 @@ import '../../../env/env.dart';
 part 'dio_client_provider.g.dart';
 
 @Riverpod(keepAlive: true)
-Dio dioClient(DioClientRef ref) {
+Dio dioClient(Ref ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: Env.backendBaseUrl,
@@ -20,7 +21,7 @@ Dio dioClient(DioClientRef ref) {
 }
 
 @Riverpod(keepAlive: true)
-Interceptor authTokenInterceptor(AuthTokenInterceptorRef ref) {
+Interceptor authTokenInterceptor(Ref ref) {
   return QueuedInterceptorsWrapper(
     onRequest: (options, handler) async {
       final user = FirebaseAuth.instance.currentUser;
