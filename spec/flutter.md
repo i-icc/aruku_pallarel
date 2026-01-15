@@ -57,7 +57,7 @@ lib/
 | API | `dio` |
 | モデル | `freezed_annotation`, `json_annotation` |
 | Firebase | `firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_messaging` |
-| 地図/位置 | `flutter_map`, `latlong2`, `geolocator` |
+| 地図/位置 | `flutter_map`, `latlong2`, `locus` |
 | UI | `gap`, `loading_animation_widget`, `url_launcher` |
 | dev | `build_runner`, `riverpod_generator`, `auto_route_generator`, `freezed`, `json_serializable`, `envied_generator` |
 
