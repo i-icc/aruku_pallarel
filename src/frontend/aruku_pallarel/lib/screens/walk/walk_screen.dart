@@ -9,6 +9,7 @@ import 'package:locus/locus.dart';
 
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
+import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
 
 @RoutePage()
@@ -42,6 +43,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
 
     try {
       await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
+      await ref
+          .read(walkLocationRecorderNotifierProvider.notifier)
+          .stopRecording();
       await ref.read(walkTrackingNotifierProvider.notifier).stopTracking();
       if (!mounted) {
         return;
@@ -83,6 +87,10 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       }
       return;
     }
+
+    await ref
+        .read(walkLocationRecorderNotifierProvider.notifier)
+        .startRecording(activeWalk.walkId);
 
     await _locationSubscription?.cancel();
     _locationSubscription = Locus.location.stream.listen(
