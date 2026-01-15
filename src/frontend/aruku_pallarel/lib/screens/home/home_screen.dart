@@ -8,7 +8,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../features/authentication/provider/user_profile_provider.dart';
 import '../../features/share/services/backend_exception.dart';
+import '../../features/walk/models/walk_location.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
+import '../../features/walk/services/walk_location_service.dart';
 import '../../router/app_router.dart';
 
 @RoutePage()
@@ -84,9 +86,22 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
     try {
       const fallbackLat = 35.681236;
       const fallbackLon = 139.767125;
+      final locationService = ref.read(walkLocationServiceProvider);
+      final location = await locationService.getCurrentLocation().onError(
+        (error, _) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('位置情報の取得に失敗しました: $error')),
+          );
+          return const WalkLocation(
+            latitude: fallbackLat,
+            longitude: fallbackLon,
+            recordedAt: DateTime.fromMillisecondsSinceEpoch(0),
+          );
+        },
+      );
       await ref.read(activeWalkNotifierProvider.notifier).startWalk(
-            lat: fallbackLat,
-            lon: fallbackLon,
+            lat: location.latitude,
+            lon: location.longitude,
           );
       if (!mounted) {
         return;
