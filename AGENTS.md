@@ -20,7 +20,6 @@
 ## Working Conventions
 - 仕様変更は `spec/` を先に更新し、`README.md` は概要とリンクのみに反映する
 - `spec/` 内に新規ドキュメントを追加したら `spec/README.md` に追記する
-- 位置情報の記録は distanceFilter ベースで行い、ポーリングでの取得は避ける
 - ローカルの Backend/Emulator/Tasks スタブは `infrastructure/docker-compose.yml` を使用する
 - Backend/ADK は `uv` で依存管理し、起動・開発は Docker Compose を優先する
 - Backend/ADK の `pyproject.toml`/`README.md` は各ディレクトリで独立管理する
