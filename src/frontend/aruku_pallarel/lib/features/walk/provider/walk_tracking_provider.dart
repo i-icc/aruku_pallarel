@@ -33,7 +33,7 @@ class WalkTrackingState {
 
 @Riverpod(keepAlive: true)
 class WalkTrackingNotifier extends _$WalkTrackingNotifier {
-  static const double _distanceFilterMeters = 10;
+  static const double _distanceFilterMeters = 15;
   bool _ready = false;
 
   @override

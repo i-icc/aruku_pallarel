@@ -80,8 +80,7 @@ flowchart TB
 ### 4. 位置情報収集
 - GIVEN: 散歩開始済み（フォアグラウンド/バックグラウンド）
 - WHEN:
-  - 端末で 20 秒ごとに位置を取得
-  - 前回から変化している場合のみ送信
+  - Locus で位置情報の更新を受信（distanceFilter: 15m）
 - THEN:
   - Firestore に位置情報が追記される
 
