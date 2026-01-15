@@ -89,10 +89,12 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
       final locationService = ref.read(walkLocationServiceProvider);
       final location = await locationService.getCurrentLocation().onError(
         (error, _) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('位置情報の取得に失敗しました: $error')),
-          );
-          return const WalkLocation(
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('位置情報の取得に失敗しました: $error')),
+            );
+          }
+          return WalkLocation(
             latitude: fallbackLat,
             longitude: fallbackLon,
             recordedAt: DateTime.fromMillisecondsSinceEpoch(0),
