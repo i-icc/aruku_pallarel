@@ -25,5 +25,4 @@
 - Backend/ADK の `pyproject.toml`/`README.md` は各ディレクトリで独立管理する
 - Backend エミュレーター利用時は ADC を用意し、`GOOGLE_APPLICATION_CREDENTIALS` と gcloud 設定のマウントを行う
 - Flutter/Dart のコマンドは必ず `fvm` 経由で実行する（例: `fvm flutter`, `fvm dart`）
-- Gitleaks の GitHub Actions が PR と main push で実行される
 - バグ修正時は `tasks/` にチケットを起票してから対応する
