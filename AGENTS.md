@@ -26,4 +26,3 @@
 - Backend エミュレーター利用時は ADC を用意し、`GOOGLE_APPLICATION_CREDENTIALS` と gcloud 設定のマウントを行う
 - Flutter/Dart のコマンドは必ず `fvm` 経由で実行する（例: `fvm flutter`, `fvm dart`）
 - バグ修正時は `tasks/` にチケットを起票してから対応する
-- Dependabot はセキュリティ更新を優先し、minor/patch 更新はグルーピングでまとめる
