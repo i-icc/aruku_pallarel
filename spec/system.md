@@ -70,7 +70,7 @@ flowchart TB
 4. Backend → App: walkId 返却
 
 ### 位置更新
-1. App は 20 秒ごとに位置を取得
+1. App は distanceFilter を使い、一定距離移動したタイミングで位置を取得
 2. 変化がある場合のみ Firestore の `locations` に追記
 
 ### 履歴/提案の閲覧
