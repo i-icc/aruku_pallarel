@@ -50,7 +50,7 @@
       },
       "devDependencies": {
           "@types/node": "^20.10.0",
-          "@vitejs/plugin-react-swc": "^3.10.2",
+          "@vitejs/plugin-react-swc": "^4.2.2",
           "vite": "6.3.5"
       },
       "scripts": {
