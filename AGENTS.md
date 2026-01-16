@@ -25,4 +25,6 @@
 - Backend/ADK の `pyproject.toml`/`README.md` は各ディレクトリで独立管理する
 - Backend エミュレーター利用時は ADC を用意し、`GOOGLE_APPLICATION_CREDENTIALS` と gcloud 設定のマウントを行う
 - Flutter/Dart のコマンドは必ず `fvm` 経由で実行する（例: `fvm flutter`, `fvm dart`）
+- 位置情報取得は `locus` (v2) を使用する
+- 散歩再開は Firestore の active walk を復元する前提で対応する
 - バグ修正時は `tasks/` にチケットを起票してから対応する

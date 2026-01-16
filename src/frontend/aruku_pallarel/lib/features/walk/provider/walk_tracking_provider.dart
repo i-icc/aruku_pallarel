@@ -1,4 +1,4 @@
-import 'package:locus/locus.dart';
+import 'package:locus/locus.dart' as locus;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'walk_tracking_provider.g.dart';
@@ -9,24 +9,44 @@ class WalkTrackingState {
     this.isTracking = false,
     this.isRequesting = false,
     this.errorMessage,
+    this.debugState,
+    this.serviceEnabled,
+    this.isMoving,
+    this.hasLocation = false,
+    this.locationText,
   });
 
   final bool permissionGranted;
   final bool isTracking;
   final bool isRequesting;
   final String? errorMessage;
+  final String? debugState;
+  final bool? serviceEnabled;
+  final bool? isMoving;
+  final bool hasLocation;
+  final String? locationText;
 
   WalkTrackingState copyWith({
     bool? permissionGranted,
     bool? isTracking,
     bool? isRequesting,
     String? errorMessage,
+    String? debugState,
+    bool? serviceEnabled,
+    bool? isMoving,
+    bool? hasLocation,
+    String? locationText,
   }) {
     return WalkTrackingState(
       permissionGranted: permissionGranted ?? this.permissionGranted,
       isTracking: isTracking ?? this.isTracking,
       isRequesting: isRequesting ?? this.isRequesting,
       errorMessage: errorMessage,
+      debugState: debugState ?? this.debugState,
+      serviceEnabled: serviceEnabled ?? this.serviceEnabled,
+      isMoving: isMoving ?? this.isMoving,
+      hasLocation: hasLocation ?? this.hasLocation,
+      locationText: locationText ?? this.locationText,
     );
   }
 }
@@ -47,21 +67,22 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
     state = state.copyWith(isRequesting: true, errorMessage: null);
 
     try {
-      final granted = await Locus.requestPermission();
+      final granted = await locus.Locus.requestPermission();
       if (!granted) {
         state = state.copyWith(
           permissionGranted: false,
           isTracking: false,
           isRequesting: false,
         );
+        await _refreshDebugState();
         return false;
       }
 
       if (!_ready) {
-        await Locus.ready(
-          ConfigPresets.balanced.copyWith(
+        await locus.Locus.ready(
+          locus.ConfigPresets.balanced.copyWith(
             distanceFilter: _distanceFilterMeters,
-            notification: const NotificationConfig(
+            notification: const locus.NotificationConfig(
               title: 'Walk tracking',
               text: 'Tracking location in the background',
             ),
@@ -70,12 +91,13 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         _ready = true;
       }
 
-      await Locus.start();
+      await locus.Locus.start();
       state = state.copyWith(
         permissionGranted: true,
         isTracking: true,
         isRequesting: false,
       );
+      await _refreshDebugState();
       return true;
     } catch (error) {
       state = state.copyWith(
@@ -83,6 +105,7 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         isRequesting: false,
         errorMessage: error.toString(),
       );
+      await _refreshDebugState();
       return false;
     }
   }
@@ -92,9 +115,43 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
       return;
     }
     try {
-      await Locus.stop();
+      await locus.Locus.stop();
     } finally {
       state = state.copyWith(isTracking: false);
+      await _refreshDebugState();
+    }
+  }
+
+  Future<void> refreshDebugState() async {
+    await _refreshDebugState();
+  }
+
+  Future<void> _refreshDebugState() async {
+    try {
+      final debug = await locus.Locus.getState();
+      final location = debug.location;
+      final hasLocation = location != null && location.coords.isValid;
+      final locationText = hasLocation
+          ? '${location.coords.latitude.toStringAsFixed(5)},'
+              '${location.coords.longitude.toStringAsFixed(5)}'
+          : null;
+      state = state.copyWith(
+        debugState: 'enabled=${debug.enabled}, '
+            'isMoving=${debug.isMoving}, '
+            'location=${locationText ?? 'none'}',
+        serviceEnabled: debug.enabled,
+        isMoving: debug.isMoving,
+        hasLocation: hasLocation,
+        locationText: locationText,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        debugState: 'state error: $error',
+        serviceEnabled: null,
+        isMoving: null,
+        hasLocation: false,
+        locationText: null,
+      );
     }
   }
 }

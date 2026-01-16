@@ -64,6 +64,7 @@ flowchart TB
 ## 主要フロー
 
 ### 散歩開始
+0. App は Firestore を参照し active な散歩があれば再開する
 1. App → Backend: 散歩開始リクエスト（初期位置、ID トークン付き）
 2. Backend → Auth: トークン検証
 3. Backend → Firestore: walk ドキュメント作成

@@ -7,7 +7,7 @@ part of 'active_walk_provider.dart';
 // **************************************************************************
 
 String _$activeWalkNotifierHash() =>
-    r'3f53bcc949f639c6107a4dab2ff9d1289acc7fb2';
+    r'7184898f166cbae358dd6046b6fc315b60c9ce7e';
 
 /// See also [ActiveWalkNotifier].
 @ProviderFor(ActiveWalkNotifier)

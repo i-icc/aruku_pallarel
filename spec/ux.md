@@ -74,6 +74,7 @@ flowchart TB
 - GIVEN: ホーム画面
 - WHEN: 散歩開始ボタンを押す（初期位置を送信）
 - THEN:
+  - すでに active な散歩がある場合はそれを再開する
   - 散歩中マップへ遷移し現在地が表示される
   - Firestore に walk ドキュメントとサブコレクションが作成される
 
@@ -83,6 +84,7 @@ flowchart TB
   - Locus で位置情報の更新を受信（distanceFilter: 15m）
 - THEN:
   - Firestore に位置情報が追記される
+  - 位置情報権限がない場合は許可の案内と設定画面への導線を表示する
 
 > **バックグラウンド動作**
 > - iOS: 「常に許可」の位置情報権限を取得し、Background Modes (location) を有効化

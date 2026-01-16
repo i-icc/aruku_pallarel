@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:locus/locus.dart';
+import 'package:locus/locus.dart' as locus;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
@@ -27,13 +28,18 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   String? _locationError;
   LatLng? _currentCenter;
   bool _mapReady = false;
-  StreamSubscription<Location>? _locationSubscription;
+  StreamSubscription<locus.Location>? _locationSubscription;
   final MapController _mapController = MapController();
 
   @override
   void initState() {
     super.initState();
-    _startTracking();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _startTracking();
+    });
   }
 
   Future<void> _finishWalk() async {
@@ -79,6 +85,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
 
     final granted =
         await ref.read(walkTrackingNotifierProvider.notifier).startTracking();
+    await ref.read(walkTrackingNotifierProvider.notifier).refreshDebugState();
     if (!granted) {
       if (mounted) {
         setState(() {
@@ -93,7 +100,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         .startRecording(activeWalk.walkId);
 
     await _locationSubscription?.cancel();
-    _locationSubscription = Locus.location.stream.listen(
+    _locationSubscription = locus.Locus.location.stream.listen(
       (location) {
         final coords = location.coords;
         if (!coords.isValid) {
@@ -119,12 +126,47 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         });
       },
     );
+
+    try {
+      final current = await locus.LocusLocation.getCurrentPosition(
+        timeout: 15,
+        maximumAge: 0,
+      );
+      final coords = current.coords;
+      if (coords.isValid && mounted) {
+        final center = LatLng(coords.latitude, coords.longitude);
+        setState(() {
+          _currentCenter = center;
+        });
+        if (_mapReady) {
+          _mapController.move(center, _mapController.camera.zoom);
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _locationError = 'getCurrentPosition failed: $error';
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _locationSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _openSettings() async {
+    final uri = Uri.parse('app-settings:');
+    if (!await launchUrl(uri)) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open settings.')),
+      );
+    }
   }
 
   @override
@@ -155,6 +197,32 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
               ),
             ] else ...[
               Text('Walk ID: ${activeWalk.walkId}'),
+              if (trackingState.errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  trackingState.errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
+              if (trackingState.serviceEnabled == false) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Location services are disabled. Enable them in Settings.',
+                  style: TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _openSettings,
+                  child: const Text('Open Settings'),
+                ),
+              ],
+              if (trackingState.debugState != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  trackingState.debugState!,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ],
               if (_locationError != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -174,7 +242,24 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   onPressed: trackingState.isRequesting ? null : _startTracking,
                   child: const Text('Enable Location'),
                 ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: _openSettings,
+                  child: const Text('Open Settings'),
+                ),
               ] else ...[
+                if (_currentCenter == null) ...[
+                  const Text(
+                    'Waiting for location updates. '
+                    'If using an emulator, set a mock location.',
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _startTracking,
+                    child: const Text('Refresh Location'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Expanded(
                   child: FlutterMap(
                     mapController: _mapController,

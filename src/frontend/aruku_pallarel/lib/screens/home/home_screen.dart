@@ -37,6 +37,12 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
   void initState() {
     super.initState();
     _refreshStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref.read(activeWalkNotifierProvider.notifier).loadActiveWalk();
+    });
   }
 
   Future<void> _refreshStatus() async {
@@ -96,12 +102,24 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
       if (!mounted) {
         return;
       }
-      final message = error.code == 'WALK_ALREADY_ACTIVE'
-          ? 'Walk already active.'
-          : error.message;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      if (error.code == 'WALK_ALREADY_ACTIVE') {
+        final session =
+            await ref.read(activeWalkNotifierProvider.notifier).loadActiveWalk();
+        if (!mounted) {
+          return;
+        }
+        if (session != null) {
+          await context.router.push(const WalkRoute());
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Active walk not found.')),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -145,14 +163,22 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
               const SizedBox(height: 12),
             ],
             ElevatedButton(
-              onPressed: _walkLoading ? null : _startWalk,
+              onPressed: _walkLoading
+                  ? null
+                  : () async {
+                      if (activeWalk != null) {
+                        await context.router.push(const WalkRoute());
+                        return;
+                      }
+                      await _startWalk();
+                    },
               child: _walkLoading
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Start Walk'),
+                  : Text(activeWalk == null ? 'Start Walk' : 'Continue Walk'),
             ),
             const SizedBox(height: 12),
             Text('Firestore: $_firestoreStatus'),
