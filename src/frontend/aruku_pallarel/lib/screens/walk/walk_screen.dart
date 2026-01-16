@@ -216,6 +216,15 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   child: const Text('Open Settings'),
                 ),
               ],
+              if (trackingState.permissionGranted &&
+                  trackingState.alwaysGranted == false) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Background location is not granted. '
+                  'Tracking may stop in background.',
+                  style: TextStyle(color: Colors.orange),
+                ),
+              ],
               if (trackingState.debugState != null) ...[
                 const SizedBox(height: 8),
                 Text(

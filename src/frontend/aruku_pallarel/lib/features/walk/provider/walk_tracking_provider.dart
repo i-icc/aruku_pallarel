@@ -1,4 +1,5 @@
 import 'package:locus/locus.dart' as locus;
+import 'package:permission_handler/permission_handler.dart' as permission;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'walk_tracking_provider.g.dart';
@@ -14,6 +15,8 @@ class WalkTrackingState {
     this.isMoving,
     this.hasLocation = false,
     this.locationText,
+    this.whenInUseGranted,
+    this.alwaysGranted,
   });
 
   final bool permissionGranted;
@@ -25,6 +28,8 @@ class WalkTrackingState {
   final bool? isMoving;
   final bool hasLocation;
   final String? locationText;
+  final bool? whenInUseGranted;
+  final bool? alwaysGranted;
 
   WalkTrackingState copyWith({
     bool? permissionGranted,
@@ -36,6 +41,8 @@ class WalkTrackingState {
     bool? isMoving,
     bool? hasLocation,
     String? locationText,
+    bool? whenInUseGranted,
+    bool? alwaysGranted,
   }) {
     return WalkTrackingState(
       permissionGranted: permissionGranted ?? this.permissionGranted,
@@ -47,6 +54,8 @@ class WalkTrackingState {
       isMoving: isMoving ?? this.isMoving,
       hasLocation: hasLocation ?? this.hasLocation,
       locationText: locationText ?? this.locationText,
+      whenInUseGranted: whenInUseGranted ?? this.whenInUseGranted,
+      alwaysGranted: alwaysGranted ?? this.alwaysGranted,
     );
   }
 }
@@ -67,7 +76,7 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
     state = state.copyWith(isRequesting: true, errorMessage: null);
 
     try {
-      final granted = await locus.Locus.requestPermission();
+      final granted = await _requestLocationPermissions();
       if (!granted) {
         state = state.copyWith(
           permissionGranted: false,
@@ -82,6 +91,8 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         await locus.Locus.ready(
           locus.ConfigPresets.balanced.copyWith(
             distanceFilter: _distanceFilterMeters,
+            autoSync: false,
+            batchSync: false,
             notification: const locus.NotificationConfig(
               title: 'Walk tracking',
               text: 'Tracking location in the background',
@@ -126,8 +137,32 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
     await _refreshDebugState();
   }
 
+  Future<bool> _requestLocationPermissions() async {
+    final whenInUse = await permission.Permission.locationWhenInUse.request();
+    final whenInUseGranted = whenInUse.isGranted;
+    if (!whenInUseGranted) {
+      state = state.copyWith(
+        permissionGranted: false,
+        whenInUseGranted: false,
+      );
+      return false;
+    }
+
+    final always = await permission.Permission.locationAlways.request();
+    final alwaysGranted = always.isGranted;
+    state = state.copyWith(
+      permissionGranted: true,
+      whenInUseGranted: true,
+      alwaysGranted: alwaysGranted,
+    );
+    return true;
+  }
+
   Future<void> _refreshDebugState() async {
     try {
+      final serviceStatus = await permission.Permission.location.serviceStatus;
+      final serviceEnabled =
+          serviceStatus == permission.ServiceStatus.enabled;
       final debug = await locus.Locus.getState();
       final location = debug.location;
       final hasLocation = location != null && location.coords.isValid;
@@ -136,10 +171,11 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
               '${location.coords.longitude.toStringAsFixed(5)}'
           : null;
       state = state.copyWith(
-        debugState: 'enabled=${debug.enabled}, '
+        debugState: 'service=${serviceEnabled ? 'on' : 'off'}, '
+            'enabled=${debug.enabled}, '
             'isMoving=${debug.isMoving}, '
             'location=${locationText ?? 'none'}',
-        serviceEnabled: debug.enabled,
+        serviceEnabled: serviceEnabled,
         isMoving: debug.isMoving,
         hasLocation: hasLocation,
         locationText: locationText,
