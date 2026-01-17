@@ -1,7 +1,7 @@
 [extend]
 useDefault = true
 
-[[allowlist]]
+[allowlist]
 description = "Podfile.lock の spec checksums を除外"
 paths = [
   '''^src/frontend/aruku_pallarel/ios/Podfile\.lock$''',
