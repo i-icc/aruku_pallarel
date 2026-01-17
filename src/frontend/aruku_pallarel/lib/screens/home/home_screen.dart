@@ -186,6 +186,11 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
                   : Text(activeWalk == null ? 'Start Walk' : 'Continue Walk'),
             ),
             const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => context.router.push(const HistoryRoute()),
+              child: const Text('History'),
+            ),
+            const SizedBox(height: 12),
             Text('Firestore: $_firestoreStatus'),
             const SizedBox(height: 12),
             ElevatedButton(

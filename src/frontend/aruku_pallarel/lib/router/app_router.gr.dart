@@ -43,6 +43,53 @@ class ChatRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [HistoryDetailScreen]
+class HistoryDetailRoute extends PageRouteInfo<HistoryDetailRouteArgs> {
+  HistoryDetailRoute({
+    Key? key,
+    required String walkId,
+    List<PageRouteInfo>? children,
+  }) : super(
+         HistoryDetailRoute.name,
+         args: HistoryDetailRouteArgs(key: key, walkId: walkId),
+         initialChildren: children,
+       );
+
+  static const String name = 'HistoryDetailRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<HistoryDetailRouteArgs>();
+      return HistoryDetailScreen(key: args.key, walkId: args.walkId);
+    },
+  );
+}
+
+class HistoryDetailRouteArgs {
+  const HistoryDetailRouteArgs({this.key, required this.walkId});
+
+  final Key? key;
+
+  final String walkId;
+
+  @override
+  String toString() {
+    return 'HistoryDetailRouteArgs{key: $key, walkId: $walkId}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! HistoryDetailRouteArgs) return false;
+    return key == other.key && walkId == other.walkId;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ walkId.hashCode;
+}
+
+/// generated route for
 /// [HistoryScreen]
 class HistoryRoute extends PageRouteInfo<void> {
   const HistoryRoute({List<PageRouteInfo>? children})
