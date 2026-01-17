@@ -36,12 +36,15 @@ erDiagram
 - `suggestCount` number
 
 ### users/{userId}/walks/{walkId}/locations/{batchId}
+- `index` number（連番。`1,2,3,...`）
+- `count` number（points の件数）
 - `points` array
   - `timestamp` timestamp
   - `geo` geopoint
 - `createdAt` timestamp
+- `updatedAt` timestamp
 
-> 1ドキュメントの上限を超えないよう、`points` は 50〜100 件程度を目安に分割する。
+> 1ドキュメントの上限を超えないよう、`points` は 64 件まで同一ドキュメントに追記し、超えたら次の `index` を作成する。
 
 ### users/{userId}/walks/{walkId}/suggests/{suggestId}
 - `suggestId` string
@@ -61,7 +64,7 @@ erDiagram
 ## ID運用
 - `walkId` / `suggestId`: 時系列ソート可能なID（例: ULID）
 - `chatId`: `timestamp-short-uuid` 形式
-- `batchId`: `timestamp-short-uuid` 形式
+- `batchId`: 連番（`1,2,3,...`）
 
 ## インデックス（推奨）
 - `walks` を `startedAt desc` で取得

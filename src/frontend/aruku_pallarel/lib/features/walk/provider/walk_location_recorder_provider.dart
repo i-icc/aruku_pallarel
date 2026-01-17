@@ -48,11 +48,16 @@ class _LocationPoint {
 
 @Riverpod(keepAlive: true)
 class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
-  static const int _maxBufferSize = 64;
+  static const int _maxBatchSize = 64;
 
   StreamSubscription<locus.Location>? _subscription;
   final List<_LocationPoint> _buffer = [];
   bool _flushInProgress = false;
+  bool _flushPending = false;
+  Future<void>? _flushFuture;
+  bool _batchLoaded = false;
+  int _currentBatchIndex = 1;
+  int _currentBatchCount = 0;
   String? _walkId;
   String? _userId;
 
@@ -80,6 +85,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
     _walkId = walkId;
     _userId = user.uid;
+    await _loadLatestBatch(user.uid, walkId);
     state = state.copyWith(isRecording: true, errorMessage: null);
 
     _subscription = locus.Locus.location.stream.listen(
@@ -99,9 +105,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
           ),
         );
         state = state.copyWith(bufferCount: _buffer.length);
-        if (_buffer.length >= _maxBufferSize) {
-          unawaited(_flushBuffer());
-        }
+        _requestFlush();
       },
       onError: (error) {
         state = state.copyWith(errorMessage: error.toString());
@@ -121,21 +125,34 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       ),
     );
     state = state.copyWith(bufferCount: _buffer.length);
-    if (_buffer.length >= _maxBufferSize) {
-      unawaited(_flushBuffer());
-    }
+    _requestFlush();
   }
 
   Future<void> stopRecording({bool flush = true}) async {
     await _subscription?.cancel();
     _subscription = null;
     if (flush) {
-      await _flushBuffer();
+      if (_flushInProgress && _flushFuture != null) {
+        _flushPending = true;
+        await _flushFuture;
+      } else {
+        await _flushBuffer();
+      }
     }
     _buffer.clear();
+    _resetBatchState();
     _walkId = null;
     _userId = null;
     state = state.copyWith(isRecording: false, bufferCount: 0);
+  }
+
+  void _requestFlush() {
+    if (_flushInProgress) {
+      _flushPending = true;
+      return;
+    }
+    _flushFuture = _flushBuffer();
+    unawaited(_flushFuture);
   }
 
   Future<void> _flushBuffer() async {
@@ -149,25 +166,58 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     }
 
     _flushInProgress = true;
-    final batch = List<_LocationPoint>.from(_buffer);
-    _buffer.clear();
-    state = state.copyWith(bufferCount: _buffer.length);
+    _flushPending = false;
+    var success = true;
     try {
-      await _writeBatch(userId, walkId, batch);
+      if (!_batchLoaded) {
+        await _loadLatestBatch(userId, walkId);
+      }
+      while (_buffer.isNotEmpty) {
+        if (_currentBatchCount >= _maxBatchSize) {
+          _currentBatchIndex += 1;
+          _currentBatchCount = 0;
+        }
+        final capacity = _maxBatchSize - _currentBatchCount;
+        final takeCount =
+            _buffer.length > capacity ? capacity : _buffer.length;
+        final chunk = _buffer.take(takeCount).toList();
+        _buffer.removeRange(0, takeCount);
+        state = state.copyWith(bufferCount: _buffer.length);
+        final chunkSuccess = await _writeBatchChunk(
+          userId,
+          walkId,
+          _currentBatchIndex,
+          _currentBatchCount == 0,
+          chunk,
+        );
+        if (!chunkSuccess) {
+          _buffer.insertAll(0, chunk);
+          state = state.copyWith(bufferCount: _buffer.length);
+          success = false;
+          break;
+        }
+        _currentBatchCount += chunk.length;
+      }
     } catch (error) {
-      _buffer.insertAll(0, batch);
       state = state.copyWith(
-        bufferCount: _buffer.length,
         errorMessage: error.toString(),
       );
+      success = false;
     } finally {
       _flushInProgress = false;
+      _flushFuture = null;
+    }
+
+    if (success && (_buffer.isNotEmpty || _flushPending)) {
+      _requestFlush();
     }
   }
 
-  Future<void> _writeBatch(
+  Future<bool> _writeBatchChunk(
     String userId,
     String walkId,
+    int batchIndex,
+    bool isNewBatch,
     List<_LocationPoint> points,
   ) async {
     final firestoreInstance = firestore.FirebaseFirestore.instance;
@@ -177,7 +227,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
         .collection('walks')
         .doc(walkId)
         .collection('locations')
-        .doc();
+        .doc(batchIndex.toString());
 
     final payload = points
         .map(
@@ -188,10 +238,68 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
         )
         .toList();
 
-    await batchRef.set({
-      'points': payload,
-      'createdAt': firestore.FieldValue.serverTimestamp(),
-    });
+    final data = <String, Object?>{
+      'index': batchIndex,
+      'count': firestore.FieldValue.increment(points.length),
+      'points': firestore.FieldValue.arrayUnion(payload),
+      'updatedAt': firestore.FieldValue.serverTimestamp(),
+    };
+    if (isNewBatch) {
+      data['createdAt'] = firestore.FieldValue.serverTimestamp();
+    }
+    await batchRef.set(data, firestore.SetOptions(merge: true));
+    return true;
+  }
+
+  Future<void> _loadLatestBatch(String userId, String walkId) async {
+    _batchLoaded = false;
+    _currentBatchIndex = 1;
+    _currentBatchCount = 0;
+    try {
+      final snapshot = await firestore.FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('walks')
+          .doc(walkId)
+          .collection('locations')
+          .orderBy('index', descending: true)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isEmpty) {
+        _batchLoaded = true;
+        return;
+      }
+      final doc = snapshot.docs.first;
+      final data = doc.data();
+      final indexValue = data['index'];
+      final countValue = data['count'];
+      final resolvedIndex = indexValue is int
+          ? indexValue
+          : int.tryParse(doc.id) ?? 1;
+      var resolvedCount = 0;
+      if (countValue is int) {
+        resolvedCount = countValue;
+      } else if (data['points'] is List) {
+        resolvedCount = (data['points'] as List).length;
+      }
+      if (resolvedCount >= _maxBatchSize) {
+        _currentBatchIndex = resolvedIndex + 1;
+        _currentBatchCount = 0;
+      } else {
+        _currentBatchIndex = resolvedIndex;
+        _currentBatchCount = resolvedCount;
+      }
+    } catch (error) {
+      state = state.copyWith(errorMessage: error.toString());
+    } finally {
+      _batchLoaded = true;
+    }
+  }
+
+  void _resetBatchState() {
+    _batchLoaded = false;
+    _currentBatchIndex = 1;
+    _currentBatchCount = 0;
   }
 
   void _dispose() {
