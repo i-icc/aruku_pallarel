@@ -90,6 +90,13 @@ flowchart TB
 > - iOS: 「常に許可」の位置情報権限を取得し、Background Modes (location) を有効化
 > - Android: Foreground Service + `ACCESS_BACKGROUND_LOCATION` 権限で通知バーに常駐
 
+### 4.1 位置偽装（開発用）
+- GIVEN: 設定で「位置偽装」を ON
+- WHEN: 散歩中マップを 2 秒長押しする
+- THEN:
+  - 長押しした地点を現在地として扱う
+  - OFF に戻すと偽装位置をクリアする
+
 ### 5. 提案リクエスト（自動）
 - GIVEN:
   - 散歩開始済み

@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import 'location_spoof_provider.dart';
 
 part 'walk_location_recorder_provider.g.dart';
 
@@ -81,6 +84,9 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
     _subscription = locus.Locus.location.stream.listen(
       (location) {
+        if (ref.read(locationSpoofNotifierProvider).enabled) {
+          return;
+        }
         final coords = location.coords;
         if (!coords.isValid) {
           return;
@@ -101,6 +107,23 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
         state = state.copyWith(errorMessage: error.toString());
       },
     );
+  }
+
+  void recordManualLocation(LatLng location) {
+    if (!state.isRecording || _walkId == null || _userId == null) {
+      return;
+    }
+    _buffer.add(
+      _LocationPoint(
+        timestamp: DateTime.now(),
+        latitude: location.latitude,
+        longitude: location.longitude,
+      ),
+    );
+    state = state.copyWith(bufferCount: _buffer.length);
+    if (_buffer.length >= _maxBufferSize) {
+      unawaited(_flushBuffer());
+    }
   }
 
   Future<void> stopRecording({bool flush = true}) async {

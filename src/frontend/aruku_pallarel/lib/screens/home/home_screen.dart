@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../features/authentication/provider/user_profile_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
+import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../router/app_router.dart';
 
 @RoutePage()
@@ -90,9 +91,13 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
     try {
       const fallbackLat = 35.681236;
       const fallbackLon = 139.767125;
+      final spoofState = ref.read(locationSpoofNotifierProvider);
+      final spoofLocation = spoofState.enabled ? spoofState.location : null;
+      final startLat = spoofLocation?.latitude ?? fallbackLat;
+      final startLon = spoofLocation?.longitude ?? fallbackLon;
       await ref.read(activeWalkNotifierProvider.notifier).startWalk(
-            lat: fallbackLat,
-            lon: fallbackLon,
+            lat: startLat,
+            lon: startLon,
           );
       if (!mounted) {
         return;

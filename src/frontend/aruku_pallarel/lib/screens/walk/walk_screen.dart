@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
+import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
 
@@ -23,6 +25,8 @@ class WalkScreen extends ConsumerStatefulWidget {
 
 class _WalkScreenState extends ConsumerState<WalkScreen> {
   static const LatLng _fallbackCenter = LatLng(35.681236, 139.767125);
+  static const Duration _spoofHoldDuration = Duration(seconds: 2);
+  static const double _spoofMoveThreshold = 12;
 
   bool _finishLoading = false;
   String? _locationError;
@@ -30,6 +34,10 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   bool _mapReady = false;
   StreamSubscription<locus.Location>? _locationSubscription;
   final MapController _mapController = MapController();
+  Timer? _spoofTimer;
+  Offset? _spoofPressPosition;
+  Offset? _spoofStartPosition;
+  int? _spoofPointerId;
 
   @override
   void initState() {
@@ -83,6 +91,22 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       _locationError = null;
     });
 
+    final spoofState = ref.read(locationSpoofNotifierProvider);
+    if (spoofState.enabled) {
+      await ref
+          .read(walkLocationRecorderNotifierProvider.notifier)
+          .startRecording(activeWalk.walkId);
+      await _locationSubscription?.cancel();
+      _locationSubscription = null;
+      if (_mapReady && spoofState.location != null) {
+        _mapController.move(
+          spoofState.location!,
+          _mapController.camera.zoom,
+        );
+      }
+      return;
+    }
+
     final granted =
         await ref.read(walkTrackingNotifierProvider.notifier).startTracking();
     await ref.read(walkTrackingNotifierProvider.notifier).refreshDebugState();
@@ -102,6 +126,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     await _locationSubscription?.cancel();
     _locationSubscription = locus.Locus.location.stream.listen(
       (location) {
+        if (ref.read(locationSpoofNotifierProvider).enabled) {
+          return;
+        }
         final coords = location.coords;
         if (!coords.isValid) {
           return;
@@ -154,7 +181,73 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _cancelSpoofTimer();
     super.dispose();
+  }
+
+  void _cancelSpoofTimer() {
+    _spoofTimer?.cancel();
+    _spoofTimer = null;
+    _spoofPressPosition = null;
+    _spoofStartPosition = null;
+    _spoofPointerId = null;
+  }
+
+  void _onSpoofPointerDown(PointerDownEvent event) {
+    if (!ref.read(locationSpoofNotifierProvider).enabled) {
+      return;
+    }
+    _spoofPointerId = event.pointer;
+    _spoofPressPosition = event.localPosition;
+    _spoofStartPosition = event.localPosition;
+    _spoofTimer?.cancel();
+    _spoofTimer = Timer(_spoofHoldDuration, _handleSpoofLongPress);
+  }
+
+  void _onSpoofPointerMove(PointerMoveEvent event) {
+    if (_spoofPointerId != event.pointer || _spoofStartPosition == null) {
+      return;
+    }
+    final delta = event.localPosition - _spoofStartPosition!;
+    if (delta.distance > _spoofMoveThreshold) {
+      _cancelSpoofTimer();
+      return;
+    }
+    _spoofPressPosition = event.localPosition;
+  }
+
+  void _onSpoofPointerUp(PointerUpEvent event) {
+    if (_spoofPointerId != event.pointer) {
+      return;
+    }
+    _cancelSpoofTimer();
+  }
+
+  void _onSpoofPointerCancel(PointerCancelEvent event) {
+    if (_spoofPointerId != event.pointer) {
+      return;
+    }
+    _cancelSpoofTimer();
+  }
+
+  void _handleSpoofLongPress() {
+    _spoofTimer = null;
+    final position = _spoofPressPosition;
+    if (!mounted || position == null) {
+      return;
+    }
+    final spoofState = ref.read(locationSpoofNotifierProvider);
+    if (!spoofState.enabled || !_mapReady) {
+      return;
+    }
+    final latLng = _mapController.camera.pointToLatLng(
+      Point<double>(position.dx, position.dy),
+    );
+    ref.read(locationSpoofNotifierProvider.notifier).setLocation(latLng);
+    ref
+        .read(walkLocationRecorderNotifierProvider.notifier)
+        .recordManualLocation(latLng);
+    _mapController.move(latLng, _mapController.camera.zoom);
   }
 
   Future<void> _openSettings() async {
@@ -173,7 +266,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   Widget build(BuildContext context) {
     final activeWalk = ref.watch(activeWalkNotifierProvider);
     final trackingState = ref.watch(walkTrackingNotifierProvider);
-    final center = _currentCenter ?? _fallbackCenter;
+    final spoofState = ref.watch(locationSpoofNotifierProvider);
+    final spoofEnabled = spoofState.enabled;
+    final center = spoofEnabled && spoofState.location != null
+        ? spoofState.location!
+        : (_currentCenter ?? _fallbackCenter);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Walk'),
@@ -204,7 +301,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   style: const TextStyle(color: Colors.red),
                 ),
               ],
-              if (trackingState.serviceEnabled == false) ...[
+              if (!spoofEnabled && trackingState.serviceEnabled == false) ...[
                 const SizedBox(height: 8),
                 const Text(
                   'Location services are disabled. Enable them in Settings.',
@@ -216,13 +313,24 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   child: const Text('Open Settings'),
                 ),
               ],
-              if (trackingState.permissionGranted &&
+              if (!spoofEnabled &&
+                  trackingState.permissionGranted &&
                   trackingState.alwaysGranted == false) ...[
                 const SizedBox(height: 8),
                 const Text(
                   'Background location is not granted. '
                   'Tracking may stop in background.',
                   style: TextStyle(color: Colors.orange),
+                ),
+              ],
+              if (spoofEnabled) ...[
+                const SizedBox(height: 8),
+                Text(
+                  spoofState.location == null
+                      ? 'Location spoofing is enabled. Long-press 2s on the map '
+                          'to set your location.'
+                      : 'Location spoofing is enabled.',
+                  style: const TextStyle(color: Colors.blueGrey),
                 ),
               ],
               if (trackingState.debugState != null) ...[
@@ -232,7 +340,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   style: const TextStyle(color: Colors.grey),
                 ),
               ],
-              if (_locationError != null) ...[
+              if (_locationError != null && !spoofEnabled) ...[
                 const SizedBox(height: 8),
                 Text(
                   _locationError!,
@@ -240,7 +348,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                 ),
               ],
               const SizedBox(height: 12),
-              if (!trackingState.permissionGranted) ...[
+              if (!trackingState.permissionGranted && !spoofEnabled) ...[
                 Text(
                   trackingState.isRequesting
                       ? 'Requesting location permission...'
@@ -257,7 +365,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   child: const Text('Open Settings'),
                 ),
               ] else ...[
-                if (_currentCenter == null) ...[
+                if (!spoofEnabled && _currentCenter == null) ...[
                   const Text(
                     'Waiting for location updates. '
                     'If using an emulator, set a mock location.',
@@ -270,35 +378,43 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   const SizedBox(height: 12),
                 ],
                 Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: center,
-                      initialZoom: 16,
-                      onMapReady: () {
-                        _mapReady = true;
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.example.arukuPallarel',
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
+                    onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
+                    onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
+                    onPointerCancel:
+                        spoofEnabled ? _onSpoofPointerCancel : null,
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: center,
+                        initialZoom: 16,
+                        onMapReady: () {
+                          _mapReady = true;
+                        },
                       ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: center,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(
-                              Icons.my_location,
-                              color: Colors.blue,
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.example.arukuPallarel',
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: center,
+                              width: 40,
+                              height: 40,
+                              child: const Icon(
+                                Icons.my_location,
+                                color: Colors.blue,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
