@@ -49,18 +49,18 @@ updates:
           - "minor"
           - "patch"
 
-  - package-ecosystem: "npm"
-    directory: "/src/frontend/example"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    groups:
-      npm-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+  # - package-ecosystem: "npm"
+  #   directory: "/src/frontend/example"
+  #   schedule:
+  #     interval: "weekly"
+  #   open-pull-requests-limit: 5
+  #   groups:
+  #     npm-dependencies:
+  #       patterns:
+  #         - "*"
+  #       update-types:
+  #         - "minor"
+  #         - "patch"
 
   - package-ecosystem: "pub"
     directory: "/src/frontend/aruku_pallarel"
