@@ -74,20 +74,28 @@ flowchart TB
 - GIVEN: ホーム画面
 - WHEN: 散歩開始ボタンを押す（初期位置を送信）
 - THEN:
+  - すでに active な散歩がある場合はそれを再開する
   - 散歩中マップへ遷移し現在地が表示される
   - Firestore に walk ドキュメントとサブコレクションが作成される
 
 ### 4. 位置情報収集
 - GIVEN: 散歩開始済み（フォアグラウンド/バックグラウンド）
 - WHEN:
-  - 端末で 20 秒ごとに位置を取得
-  - 前回から変化している場合のみ送信
+  - Locus で位置情報の更新を受信（distanceFilter: 15m）
 - THEN:
   - Firestore に位置情報が追記される
+  - 位置情報権限がない場合は許可の案内と設定画面への導線を表示する
 
 > **バックグラウンド動作**
 > - iOS: 「常に許可」の位置情報権限を取得し、Background Modes (location) を有効化
 > - Android: Foreground Service + `ACCESS_BACKGROUND_LOCATION` 権限で通知バーに常駐
+
+### 4.1 位置偽装（開発用）
+- GIVEN: 設定で「位置偽装」を ON
+- WHEN: 散歩中マップを 2 秒長押しする
+- THEN:
+  - 長押しした地点を現在地として扱う
+  - OFF に戻すと偽装位置をクリアする
 
 ### 5. 提案リクエスト（自動）
 - GIVEN:

@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Podfile.lock の spec checksums を除外"
+paths = [
+  '''^src/frontend/aruku_pallarel/ios/Podfile\.lock$''',
+]
+regexes = [
+  '''(?i)^[0-9a-f]{40}$''',
+]

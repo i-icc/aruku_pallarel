@@ -64,14 +64,15 @@ flowchart TB
 ## 主要フロー
 
 ### 散歩開始
+0. App は Firestore を参照し active な散歩があれば再開する
 1. App → Backend: 散歩開始リクエスト（初期位置、ID トークン付き）
 2. Backend → Auth: トークン検証
 3. Backend → Firestore: walk ドキュメント作成
 4. Backend → App: walkId 返却
 
 ### 位置更新
-1. App は 20 秒ごとに位置を取得
-2. 変化がある場合のみ Firestore の `locations` に追記
+1. App は Locus の位置更新ストリームを購読する（distanceFilter: 15m）
+2. 位置が更新されたときのみ Firestore の `locations` に追記
 
 ### 履歴/提案の閲覧
 1. App は Firestore から `walks` / `suggests` / `chat` を読み取る

@@ -61,5 +61,19 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access to track your position.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs background location access to track your route.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>This app uses motion data to detect your activity.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dev.locus.refresh</string>
+	</array>
 </dict>
 </plist>
