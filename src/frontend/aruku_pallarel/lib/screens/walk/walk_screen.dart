@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../features/history/provider/walk_history_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/models/walk_session.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
@@ -41,6 +42,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   bool _mapReady = false;
   StreamSubscription<locus.Location>? _locationSubscription;
   final MapController _mapController = MapController();
+  final List<LatLng> _routePoints = [];
+  String? _routeWalkId;
   Timer? _spoofTimer;
   Offset? _spoofPressPosition;
   Offset? _spoofStartPosition;
@@ -94,6 +97,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       return;
     }
 
+    unawaited(_loadRouteForWalk(activeWalk.walkId));
+
     setState(() {
       _locationError = null;
     });
@@ -106,6 +111,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       await _locationSubscription?.cancel();
       _locationSubscription = null;
       if (_mapReady && spoofState.location != null) {
+        _recordRoutePoint(spoofState.location!);
         _mapController.move(
           spoofState.location!,
           _mapController.camera.zoom,
@@ -144,9 +150,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         if (!mounted) {
           return;
         }
-        setState(() {
-          _currentCenter = center;
-        });
+        _recordRoutePoint(center, updateCenter: true);
         if (_mapReady) {
           _mapController.move(center, _mapController.camera.zoom);
         }
@@ -169,9 +173,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       final coords = current.coords;
       if (coords.isValid && mounted) {
         final center = LatLng(coords.latitude, coords.longitude);
-        setState(() {
-          _currentCenter = center;
-        });
+        _recordRoutePoint(center, updateCenter: true);
         if (_mapReady) {
           _mapController.move(center, _mapController.camera.zoom);
         }
@@ -254,6 +256,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     ref
         .read(walkLocationRecorderNotifierProvider.notifier)
         .recordManualLocation(latLng);
+    _recordRoutePoint(latLng);
     _mapController.move(latLng, _mapController.camera.zoom);
   }
 
@@ -280,6 +283,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     final center = spoofEnabled && spoofState.location != null
         ? spoofState.location!
         : (_currentCenter ?? _fallbackCenter);
+    final routePoints = _routePoints;
 
     final title = activeWalk == null ? 'No active walk' : 'Live walk';
     final subtitle = activeWalk == null
@@ -323,6 +327,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                     subdomains: mapTheme.subdomains,
                     userAgentPackageName: 'com.example.arukuPallarel',
                   ),
+                  if (routePoints.length > 1)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: routePoints,
+                          strokeWidth: 4,
+                          color: AppColors.accent.withValues(alpha: 0.7),
+                        ),
+                      ],
+                    ),
                   MarkerLayer(
                     markers: [
                       Marker(
@@ -355,10 +369,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
             ),
           ),
           Positioned(
-            left: 16,
-            bottom: 16,
+            right: 0,
+            top: 0,
             child: SafeArea(
-              top: false,
+              left: false,
+              bottom: false,
+              minimum: const EdgeInsets.only(top: 8, right: 8),
               child: MapInfoButton(
                 onTap: () => showMapAttributionSheet(context, mapThemeId),
               ),
@@ -367,6 +383,63 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         ],
       ),
     );
+  }
+
+  bool _isSamePoint(LatLng a, LatLng b) {
+    return (a.latitude - b.latitude).abs() < 0.000001 &&
+        (a.longitude - b.longitude).abs() < 0.000001;
+  }
+
+  void _recordRoutePoint(LatLng point, {bool updateCenter = false}) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (updateCenter) {
+        _currentCenter = point;
+      }
+      if (_routePoints.isEmpty || !_isSamePoint(_routePoints.last, point)) {
+        _routePoints.add(point);
+      }
+    });
+  }
+
+  Future<void> _loadRouteForWalk(String walkId) async {
+    if (_routeWalkId != walkId) {
+      if (mounted) {
+        setState(() {
+          _routeWalkId = walkId;
+          _routePoints.clear();
+        });
+      } else {
+        _routeWalkId = walkId;
+        _routePoints.clear();
+      }
+    }
+    try {
+      final points =
+          await ref.read(walkHistoryRouteNotifierProvider(walkId).future);
+      if (!mounted || _routeWalkId != walkId || points.isEmpty) {
+        return;
+      }
+      setState(() {
+        if (_routePoints.isEmpty) {
+          _routePoints.addAll(points);
+          return;
+        }
+        final merged = <LatLng>[...points];
+        for (final point in _routePoints) {
+          if (merged.isEmpty || !_isSamePoint(merged.last, point)) {
+            merged.add(point);
+          }
+        }
+        _routePoints
+          ..clear()
+          ..addAll(merged);
+      });
+    } catch (_) {
+      return;
+    }
   }
 
   List<Widget> _buildNotices({

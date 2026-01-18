@@ -19,11 +19,8 @@ flutter-pub-get:
 flutter-analyze:
 	cd src/frontend/aruku_pallarel && fvm flutter analyze
 
+flutter-generate:
+	cd src/frontend/aruku_pallarel && fvm dart run build_runner build --delete-conflicting-outputs
+
 flutter-run:
 	cd src/frontend/aruku_pallarel && fvm flutter run
-
-backend-run:
-	cd src/backend/main-backend-server && uv run -- python app.py
-
-adk-run:
-	cd src/backend/sanpo-agent && uv run -- python app.py

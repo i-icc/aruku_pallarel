@@ -27,7 +27,7 @@ final walkHistoryListNotifierProvider =
 
 typedef _$WalkHistoryListNotifier = AsyncNotifier<List<WalkHistoryItem>>;
 String _$walkHistoryRouteNotifierHash() =>
-    r'77a9d539484eeee3cc523061a64c0cf802c1a6f8';
+    r'da164e204503f0e9851385fbe279ac5ca7691a03';
 
 /// Copied from Dart SDK
 class _SystemHash {

@@ -11,7 +11,6 @@ import '../../theme/map_tiles.dart';
 import '../../widgets/app_background.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_primary_button.dart';
-import '../../widgets/map_attribution_sheet.dart';
 
 @RoutePage()
 class SettingsScreen extends ConsumerWidget {
@@ -71,23 +70,6 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.info_outline, color: AppColors.inkMuted),
-                title: Text(
-                  'Map Info',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                subtitle: Text(
-                  'View map attribution details.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showMapAttributionSheet(context, selectedTheme),
               ),
             ),
             const SizedBox(height: 16),

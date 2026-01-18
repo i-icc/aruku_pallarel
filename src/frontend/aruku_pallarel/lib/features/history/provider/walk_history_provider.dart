@@ -96,13 +96,18 @@ class WalkHistoryRouteNotifier extends _$WalkHistoryRouteNotifier {
       return [];
     }
 
-    final snapshot = await FirebaseFirestore.instance
+    final walkRef = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('walks')
-        .doc(walkId)
-        .collection('locations')
-        .get();
+        .doc(walkId);
+
+    final walkSnapshot = await walkRef.get();
+    final startLocation = _parseStartLocation(
+      walkSnapshot.data()?['startLocation'],
+    );
+
+    final snapshot = await walkRef.collection('locations').get();
 
     final batches = snapshot.docs
         .map((doc) {
@@ -137,7 +142,25 @@ class WalkHistoryRouteNotifier extends _$WalkHistoryRouteNotifier {
       result.addAll(points.map((point) => point.position));
     }
 
+    if (startLocation != null) {
+      if (result.isEmpty || !_isSamePoint(result.first, startLocation)) {
+        result.insert(0, startLocation);
+      }
+    }
+
     return result;
+  }
+
+  bool _isSamePoint(LatLng a, LatLng b) {
+    return (a.latitude - b.latitude).abs() < 0.000001 &&
+        (a.longitude - b.longitude).abs() < 0.000001;
+  }
+
+  LatLng? _parseStartLocation(Object? rawLocation) {
+    if (rawLocation is! GeoPoint) {
+      return null;
+    }
+    return LatLng(rawLocation.latitude, rawLocation.longitude);
   }
 
   List<_TimedPoint> _parsePoints(Object? rawPoints) {

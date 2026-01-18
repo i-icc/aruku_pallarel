@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_styles.dart';
 import '../theme/map_tiles.dart';
 import 'app_card.dart';
 
@@ -37,72 +36,24 @@ class MapAttributionSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Map tiles are provided by the sources below.',
+                  'Map tiles are provided by the source below.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
-                for (var i = 0; i < mapThemeOptions.length; i++) ...[
-                  _AttributionItem(
-                    themeId: mapThemeOptions[i],
-                    isActive: mapThemeOptions[i] == activeTheme,
-                  ),
-                  if (i != mapThemeOptions.length - 1)
-                    const Divider(height: 16),
-                ],
+                Text(
+                  activeTheme.label,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  activeTheme.theme.attribution,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _AttributionItem extends StatelessWidget {
-  const _AttributionItem({
-    required this.themeId,
-    required this.isActive,
-  });
-
-  final MapThemeId themeId;
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                themeId.label,
-                style: theme.textTheme.titleSmall,
-              ),
-            ),
-            if (isActive)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  'Current',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.ink,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          themeId.theme.attribution,
-          style: theme.textTheme.bodySmall,
-        ),
-      ],
     );
   }
 }

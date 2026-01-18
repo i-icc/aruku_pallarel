@@ -138,10 +138,12 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
                       ],
                     ),
                     Positioned(
-                      left: 16,
-                      bottom: 16,
+                      right: 0,
+                      top: 0,
                       child: SafeArea(
-                        top: false,
+                        left: false,
+                        bottom: false,
+                        minimum: const EdgeInsets.only(top: 8, right: 8),
                         child: MapInfoButton(
                           onTap: () =>
                               showMapAttributionSheet(context, mapThemeId),
