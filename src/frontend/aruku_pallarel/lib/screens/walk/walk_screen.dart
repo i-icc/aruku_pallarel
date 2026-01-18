@@ -275,13 +275,27 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         ? spoofState.location!
         : (_currentCenter ?? _fallbackCenter);
 
+    final title = activeWalk == null ? 'No active walk' : 'Live walk';
+    final subtitle = activeWalk == null
+        ? 'Return to Home to start a session.'
+        : 'ID: ${activeWalk.walkId}';
+
+    final notices = _buildNotices(
+      spoofState: spoofState,
+      trackingState: trackingState,
+    );
+
+    final actions = _buildActions(
+      context,
+      activeWalk: activeWalk,
+      spoofEnabled: spoofEnabled,
+      trackingState: trackingState,
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Walk'),
-      ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
+          Positioned.fill(
             child: Listener(
               behavior: HitTestBehavior.opaque,
               onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
@@ -320,68 +334,17 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
               ),
             ),
           ),
-          Container(
-            width: double.infinity,
-            color: AppColors.base,
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
             child: SafeArea(
               top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      activeWalk == null ? 'No active walk' : 'Live walk',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      activeWalk == null
-                          ? 'Return to Home to start a session.'
-                          : 'ID: ${activeWalk.walkId}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _Chip(
-                          label: spoofEnabled ? 'MOCK' : 'LIVE',
-                          color: spoofEnabled
-                              ? AppColors.accentCool
-                              : AppColors.success,
-                        ),
-                        if (trackingState.permissionGranted)
-                          const _Chip(label: 'TRACKING', color: AppColors.accent)
-                        else if (!spoofEnabled)
-                          const _Chip(label: 'NO PERMISSION', color: AppColors.warning),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _CoordinateRow(center: center),
-                    const SizedBox(height: 12),
-                    ..._buildNotices(
-                      spoofState: spoofState,
-                      trackingState: trackingState,
-                    ),
-                    if (_locationError != null && !spoofEnabled) ...[
-                      const SizedBox(height: 8),
-                      _Notice(
-                        text: _locationError!,
-                        color: AppColors.danger,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    ..._buildActions(
-                      context,
-                      activeWalk: activeWalk,
-                      spoofEnabled: spoofEnabled,
-                      trackingState: trackingState,
-                    ),
-                  ],
-                ),
+              child: _BottomPanel(
+                title: title,
+                subtitle: subtitle,
+                notices: notices,
+                actions: actions,
               ),
             ),
           ),
@@ -395,54 +358,47 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     required WalkTrackingState trackingState,
   }) {
     final notices = <Widget>[];
-    if (trackingState.errorMessage != null) {
-      notices.add(
-        _Notice(
-          text: trackingState.errorMessage!,
-          color: AppColors.danger,
-        ),
-      );
+
+    void addNotice(String text, Color color) {
+      notices.add(_Notice(text: text, color: color));
+    }
+
+    if (!spoofState.enabled && !trackingState.permissionGranted) {
+      addNotice('Location permission is required.', AppColors.warning);
     }
     if (!spoofState.enabled && trackingState.serviceEnabled == false) {
-      notices.add(
-        const _Notice(
-          text: 'Location services are disabled. Enable them in Settings.',
-          color: AppColors.warning,
-        ),
+      addNotice(
+        'Location services are disabled. Enable them in Settings.',
+        AppColors.warning,
       );
     }
     if (!spoofState.enabled &&
         trackingState.permissionGranted &&
         trackingState.alwaysGranted == false) {
-      notices.add(
-        const _Notice(
-          text: 'Background location is not granted. Tracking may stop.',
-          color: AppColors.warning,
-        ),
+      addNotice(
+        'Background location is not granted. Tracking may stop.',
+        AppColors.warning,
       );
+    }
+    if (!spoofState.enabled && _currentCenter == null) {
+      addNotice('Waiting for location updates...', AppColors.inkMuted);
     }
     if (spoofState.enabled) {
-      notices.add(
-        _Notice(
-          text: spoofState.location == null
-              ? 'Mock mode: hold 2s on the map to set your location.'
-              : 'Mock mode is active.',
-          color: AppColors.accentCool,
-        ),
+      addNotice(
+        spoofState.location == null
+            ? 'Mock mode: hold 2s on the map to set your location.'
+            : 'Mock mode is active.',
+        AppColors.accentCool,
       );
     }
-    if (trackingState.debugState != null) {
-      notices.add(
-        _Notice(
-          text: trackingState.debugState!,
-          color: AppColors.inkMuted,
-        ),
-      );
+    if (_locationError != null && !spoofState.enabled) {
+      addNotice(_locationError!, AppColors.danger);
     }
+
     return notices
         .map(
           (notice) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: 6),
             child: notice,
           ),
         )
@@ -468,7 +424,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
           onPressed: trackingState.isRequesting ? null : _startTracking,
         ),
       );
-      actions.add(const SizedBox(height: 10));
+      actions.add(const SizedBox(height: 8));
       actions.add(
         OutlinedButton(
           onPressed: _openSettings,
@@ -476,16 +432,6 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         ),
       );
       return actions;
-    }
-
-    if (!spoofEnabled && _currentCenter == null) {
-      actions.add(
-        OutlinedButton(
-          onPressed: _startTracking,
-          child: const Text('Refresh Location'),
-        ),
-      );
-      actions.add(const SizedBox(height: 10));
     }
 
     if (activeWalk == null) {
@@ -512,91 +458,45 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   }
 }
 
-class _CoordinateRow extends StatelessWidget {
-  const _CoordinateRow({required this.center});
-
-  final LatLng center;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Expanded(
-          child: _CoordinateChip(
-            label: 'LAT',
-            value: center.latitude.toStringAsFixed(5),
-            textTheme: textTheme,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _CoordinateChip(
-            label: 'LON',
-            value: center.longitude.toStringAsFixed(5),
-            textTheme: textTheme,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CoordinateChip extends StatelessWidget {
-  const _CoordinateChip({
-    required this.label,
-    required this.value,
-    required this.textTheme,
+class _BottomPanel extends StatelessWidget {
+  const _BottomPanel({
+    required this.title,
+    required this.subtitle,
+    required this.notices,
+    required this.actions,
   });
 
-  final String label;
-  final String value;
-  final TextTheme textTheme;
+  final String title;
+  final String subtitle;
+  final List<Widget> notices;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.small),
+        borderRadius: BorderRadius.circular(AppRadii.medium),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(label, style: textTheme.labelMedium),
+          Text(title, style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
-          Text(value, style: textTheme.titleMedium),
+          Text(subtitle, style: theme.textTheme.bodySmall),
+          if (notices.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ...notices,
+          ],
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...actions,
+          ],
         ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.color,
-  });
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: color,
-            ),
       ),
     );
   }
