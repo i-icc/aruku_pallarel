@@ -16,7 +16,11 @@ import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../theme/app_styles.dart';
+import '../../theme/map_tiles.dart';
+import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_primary_button.dart';
+import '../../widgets/map_attribution_sheet.dart';
+import '../../widgets/map_info_button.dart';
 
 @RoutePage()
 class WalkScreen extends ConsumerStatefulWidget {
@@ -270,6 +274,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     final activeWalk = ref.watch(activeWalkNotifierProvider);
     final trackingState = ref.watch(walkTrackingNotifierProvider);
     final spoofState = ref.watch(locationSpoofNotifierProvider);
+    final mapThemeId = ref.watch(mapThemeNotifierProvider);
+    final mapTheme = mapThemeId.theme;
     final spoofEnabled = spoofState.enabled;
     final center = spoofEnabled && spoofState.location != null
         ? spoofState.location!
@@ -313,8 +319,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate: mapTheme.urlTemplate,
+                    subdomains: mapTheme.subdomains,
                     userAgentPackageName: 'com.example.arukuPallarel',
                   ),
                   MarkerLayer(
@@ -345,6 +351,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                 subtitle: subtitle,
                 notices: notices,
                 actions: actions,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: SafeArea(
+              top: false,
+              child: MapInfoButton(
+                onTap: () => showMapAttributionSheet(context, mapThemeId),
               ),
             ),
           ),

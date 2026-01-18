@@ -6,9 +6,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../router/app_router.dart';
 import '../../theme/app_styles.dart';
+import '../../theme/map_theme_provider.dart';
+import '../../theme/map_tiles.dart';
 import '../../widgets/app_background.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_primary_button.dart';
+import '../../widgets/map_attribution_sheet.dart';
 
 @RoutePage()
 class SettingsScreen extends ConsumerWidget {
@@ -25,6 +28,8 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final spoofState = ref.watch(locationSpoofNotifierProvider);
+    final selectedTheme = ref.watch(mapThemeNotifierProvider);
+    final themeNotifier = ref.read(mapThemeNotifierProvider.notifier);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -37,6 +42,53 @@ class SettingsScreen extends ConsumerWidget {
             Text(
               'Settings',
               style: Theme.of(context).textTheme.displayMedium,
+            ),
+            const SizedBox(height: 16),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _SectionHeader(
+                    icon: Icons.map_outlined,
+                    title: 'Map Theme',
+                  ),
+                  const Divider(height: 1),
+                  RadioGroup<MapThemeId>(
+                    groupValue: selectedTheme,
+                    onChanged: (value) {
+                      if (value != null) {
+                        themeNotifier.setTheme(value);
+                      }
+                    },
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < mapThemeOptions.length; i++) ...[
+                          _ThemeOption(value: mapThemeOptions[i]),
+                          if (i != mapThemeOptions.length - 1)
+                            const Divider(height: 1),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.info_outline, color: AppColors.inkMuted),
+                title: Text(
+                  'Map Info',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                subtitle: Text(
+                  'View map attribution details.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showMapAttributionSheet(context, selectedTheme),
+              ),
             ),
             const SizedBox(height: 16),
             AppCard(
@@ -115,6 +167,50 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.icon, required this.title});
+
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.inkMuted),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeOption extends StatelessWidget {
+  const _ThemeOption({
+    required this.value,
+  });
+
+  final MapThemeId value;
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioListTile<MapThemeId>(
+      value: value,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      title: Text(value.label),
+      subtitle: Text(value.subtitle),
     );
   }
 }

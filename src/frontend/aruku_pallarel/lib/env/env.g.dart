@@ -23,4 +23,6 @@ final class _Env {
   static const int firestoreEmulatorPort = 8080;
 
   static const bool useEmulators = true;
+
+  static const String jawgAccessToken = 'your_jawg_access_token';
 }

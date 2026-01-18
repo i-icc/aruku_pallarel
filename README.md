@@ -49,13 +49,5 @@ ADC の設定が必要です。詳細は `src/backend/main-backend-server/README
 - `tasks/` タスク管理
 
 ## 全体像（概要）
-```mermaid
-flowchart LR
-  App[Flutter App] -->|Auth/HTTP| API[Cloud Run API]
-  API --> FS[Firestore]
-  API --> FCM[Firebase Cloud Messaging]
-  API --> ADK[ADK / LLM]
-  API --> MAP[OSRM / OSM]
-  FCM --> App
-  App <-->|Firestore 読み書き| FS
-```
+
+![architecture](./spec/images/machi-dan.drawio.png)

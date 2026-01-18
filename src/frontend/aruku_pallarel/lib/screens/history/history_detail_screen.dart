@@ -5,8 +5,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../theme/app_styles.dart';
+import '../../theme/map_tiles.dart';
+import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_background.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/map_attribution_sheet.dart';
+import '../../widgets/map_info_button.dart';
 
 @RoutePage()
 class HistoryDetailScreen extends ConsumerStatefulWidget {
@@ -50,6 +54,8 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
   Widget build(BuildContext context) {
     final routeAsync =
         ref.watch(walkHistoryRouteNotifierProvider(widget.walkId));
+    final mapThemeId = ref.watch(mapThemeNotifierProvider);
+    final mapTheme = mapThemeId.theme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('History Detail'),
@@ -76,56 +82,71 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
           return Column(
             children: [
               Expanded(
-                child: FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: start,
-                    initialZoom: 15,
-                    onMapReady: () {
-                      _mapReady = true;
-                      final pending = _pendingBounds;
-                      if (pending != null) {
-                        _pendingBounds = null;
-                        _applyBounds(pending);
-                      }
-                    },
-                  ),
+                child: Stack(
                   children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.arukuPallarel',
-                    ),
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: points,
-                          strokeWidth: 4,
-                          color: AppColors.accent,
+                    FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: start,
+                        initialZoom: 15,
+                        onMapReady: () {
+                          _mapReady = true;
+                          final pending = _pendingBounds;
+                          if (pending != null) {
+                            _pendingBounds = null;
+                            _applyBounds(pending);
+                          }
+                        },
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: mapTheme.urlTemplate,
+                          subdomains: mapTheme.subdomains,
+                          userAgentPackageName: 'com.example.arukuPallarel',
+                        ),
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: points,
+                              strokeWidth: 4,
+                              color: AppColors.accent,
+                            ),
+                          ],
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: start,
+                              width: 36,
+                              height: 36,
+                              child: const Icon(
+                                Icons.flag,
+                                color: AppColors.success,
+                              ),
+                            ),
+                            Marker(
+                              point: end,
+                              width: 36,
+                              height: 36,
+                              child: const Icon(
+                                Icons.flag,
+                                color: AppColors.danger,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: start,
-                          width: 36,
-                          height: 36,
-                          child: const Icon(
-                            Icons.flag,
-                            color: AppColors.success,
-                          ),
+                    Positioned(
+                      left: 16,
+                      bottom: 16,
+                      child: SafeArea(
+                        top: false,
+                        child: MapInfoButton(
+                          onTap: () =>
+                              showMapAttributionSheet(context, mapThemeId),
                         ),
-                        Marker(
-                          point: end,
-                          width: 36,
-                          height: 36,
-                          child: const Icon(
-                            Icons.flag,
-                            color: AppColors.danger,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
