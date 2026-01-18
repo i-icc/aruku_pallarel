@@ -2,7 +2,11 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
 import '../../features/history/provider/walk_history_provider.dart';
+import '../../theme/app_styles.dart';
+import '../../widgets/app_background.dart';
+import '../../widgets/app_card.dart';
 
 @RoutePage()
 class HistoryDetailScreen extends ConsumerStatefulWidget {
@@ -50,97 +54,172 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
       appBar: AppBar(
         title: const Text('History Detail'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: routeAsync.when(
-          data: (points) {
-            if (points.isEmpty) {
-              return const Center(
+      body: routeAsync.when(
+        data: (points) {
+          if (points.isEmpty) {
+            return const AppBackground(
+              safeAreaTop: false,
+              child: Center(
                 child: Text('No locations recorded for this walk.'),
-              );
+              ),
+            );
+          }
+          final bounds = LatLngBounds.fromPoints(points);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
             }
-            final bounds = LatLngBounds.fromPoints(points);
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) {
-                return;
-              }
-              _applyBounds(bounds);
-            });
-            final start = points.first;
-            final end = points.last;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Walk ID: ${widget.walkId}'),
-                const SizedBox(height: 8),
-                Text('Points: ${points.length}'),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: start,
-                      initialZoom: 15,
-                      onMapReady: () {
-                        _mapReady = true;
-                        final pending = _pendingBounds;
-                        if (pending != null) {
-                          _pendingBounds = null;
-                          _applyBounds(pending);
-                        }
-                      },
+            _applyBounds(bounds);
+          });
+          final start = points.first;
+          final end = points.last;
+          return Column(
+            children: [
+              Expanded(
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: start,
+                    initialZoom: 15,
+                    onMapReady: () {
+                      _mapReady = true;
+                      final pending = _pendingBounds;
+                      if (pending != null) {
+                        _pendingBounds = null;
+                        _applyBounds(pending);
+                      }
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.example.arukuPallarel',
                     ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.example.arukuPallarel',
-                      ),
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: points,
-                            strokeWidth: 4,
-                            color: Colors.blue,
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: points,
+                          strokeWidth: 4,
+                          color: AppColors.accent,
+                        ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: start,
+                          width: 36,
+                          height: 36,
+                          child: const Icon(
+                            Icons.flag,
+                            color: AppColors.success,
                           ),
-                        ],
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: start,
-                            width: 36,
-                            height: 36,
-                            child: const Icon(
-                              Icons.flag,
-                              color: Colors.green,
-                            ),
+                        ),
+                        Marker(
+                          point: end,
+                          width: 36,
+                          height: 36,
+                          child: const Icon(
+                            Icons.flag,
+                            color: AppColors.danger,
                           ),
-                          Marker(
-                            point: end,
-                            width: 36,
-                            height: 36,
-                            child: const Icon(
-                              Icons.flag,
-                              color: Colors.red,
-                            ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: double.infinity,
+                color: AppColors.base,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Walk ID: ${widget.walkId}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Points: ${points.length}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
+                        AppCard(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _CoordinateChip(
+                                  label: 'START',
+                                  lat: start.latitude,
+                                  lon: start.longitude,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _CoordinateChip(
+                                  label: 'END',
+                                  lat: end.latitude,
+                                  lon: end.longitude,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            );
-          },
-          loading: () => const Center(
-            child: CircularProgressIndicator(),
-          ),
-          error: (error, _) => Center(
+              ),
+            ],
+          );
+        },
+        loading: () => const AppBackground(
+          safeAreaTop: false,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (error, _) => AppBackground(
+          safeAreaTop: false,
+          child: Center(
             child: Text('Failed to load route: $error'),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CoordinateChip extends StatelessWidget {
+  const _CoordinateChip({
+    required this.label,
+    required this.lat,
+    required this.lon,
+  });
+
+  final String label;
+  final double lat;
+  final double lon;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: textTheme.labelMedium),
+        const SizedBox(height: 6),
+        Text(
+          '${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}',
+          style: textTheme.bodySmall?.copyWith(color: AppColors.ink),
+        ),
+      ],
     );
   }
 }

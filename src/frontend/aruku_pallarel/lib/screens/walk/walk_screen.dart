@@ -10,10 +10,13 @@ import 'package:locus/locus.dart' as locus;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../features/share/services/backend_exception.dart';
+import '../../features/walk/models/walk_session.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
+import '../../theme/app_styles.dart';
+import '../../widgets/app_primary_button.dart';
 
 @RoutePage()
 class WalkScreen extends ConsumerStatefulWidget {
@@ -271,172 +274,358 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     final center = spoofEnabled && spoofState.location != null
         ? spoofState.location!
         : (_currentCenter ?? _fallbackCenter);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Walk'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Walk',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            if (activeWalk == null) ...[
-              const Text('No active walk.'),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () => context.router.pop(),
-                child: const Text('Back to Home'),
-              ),
-            ] else ...[
-              Text('Walk ID: ${activeWalk.walkId}'),
-              if (trackingState.errorMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  trackingState.errorMessage!,
-                  style: const TextStyle(color: Colors.red),
+      body: Column(
+        children: [
+          Expanded(
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
+              onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
+              onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
+              onPointerCancel: spoofEnabled ? _onSpoofPointerCancel : null,
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: center,
+                  initialZoom: 16,
+                  onMapReady: () {
+                    _mapReady = true;
+                  },
                 ),
-              ],
-              if (!spoofEnabled && trackingState.serviceEnabled == false) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Location services are disabled. Enable them in Settings.',
-                  style: TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _openSettings,
-                  child: const Text('Open Settings'),
-                ),
-              ],
-              if (!spoofEnabled &&
-                  trackingState.permissionGranted &&
-                  trackingState.alwaysGranted == false) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Background location is not granted. '
-                  'Tracking may stop in background.',
-                  style: TextStyle(color: Colors.orange),
-                ),
-              ],
-              if (spoofEnabled) ...[
-                const SizedBox(height: 8),
-                Text(
-                  spoofState.location == null
-                      ? 'Location spoofing is enabled. Long-press 2s on the map '
-                          'to set your location.'
-                      : 'Location spoofing is enabled.',
-                  style: const TextStyle(color: Colors.blueGrey),
-                ),
-              ],
-              if (trackingState.debugState != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  trackingState.debugState!,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ],
-              if (_locationError != null && !spoofEnabled) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _locationError!,
-                  style: const TextStyle(color: Colors.red),
-                ),
-              ],
-              const SizedBox(height: 12),
-              if (!trackingState.permissionGranted && !spoofEnabled) ...[
-                Text(
-                  trackingState.isRequesting
-                      ? 'Requesting location permission...'
-                      : 'Location permission is not granted.',
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: trackingState.isRequesting ? null : _startTracking,
-                  child: const Text('Enable Location'),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: _openSettings,
-                  child: const Text('Open Settings'),
-                ),
-              ] else ...[
-                if (!spoofEnabled && _currentCenter == null) ...[
-                  const Text(
-                    'Waiting for location updates. '
-                    'If using an emulator, set a mock location.',
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.arukuPallarel',
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: _startTracking,
-                    child: const Text('Refresh Location'),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                Expanded(
-                  child: Listener(
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
-                    onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
-                    onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
-                    onPointerCancel:
-                        spoofEnabled ? _onSpoofPointerCancel : null,
-                    child: FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: center,
-                        initialZoom: 16,
-                        onMapReady: () {
-                          _mapReady = true;
-                        },
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: center,
+                        width: 40,
+                        height: 40,
+                        child: const Icon(
+                          Icons.my_location,
+                          color: AppColors.accent,
+                        ),
                       ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            color: AppColors.base,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      activeWalk == null ? 'No active walk' : 'Live walk',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      activeWalk == null
+                          ? 'Return to Home to start a session.'
+                          : 'ID: ${activeWalk.walkId}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.example.arukuPallarel',
+                        _Chip(
+                          label: spoofEnabled ? 'MOCK' : 'LIVE',
+                          color: spoofEnabled
+                              ? AppColors.accentCool
+                              : AppColors.success,
                         ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: center,
-                              width: 40,
-                              height: 40,
-                              child: const Icon(
-                                Icons.my_location,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ],
-                        ),
+                        if (trackingState.permissionGranted)
+                          const _Chip(label: 'TRACKING', color: AppColors.accent)
+                        else if (!spoofEnabled)
+                          const _Chip(label: 'NO PERMISSION', color: AppColors.warning),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    _CoordinateRow(center: center),
+                    const SizedBox(height: 12),
+                    ..._buildNotices(
+                      spoofState: spoofState,
+                      trackingState: trackingState,
+                    ),
+                    if (_locationError != null && !spoofEnabled) ...[
+                      const SizedBox(height: 8),
+                      _Notice(
+                        text: _locationError!,
+                        color: AppColors.danger,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    ..._buildActions(
+                      context,
+                      activeWalk: activeWalk,
+                      spoofEnabled: spoofEnabled,
+                      trackingState: trackingState,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'Lat: ${center.latitude.toStringAsFixed(5)}, '
-                  'Lon: ${center.longitude.toStringAsFixed(5)}',
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _finishLoading ? null : _finishWalk,
-                  child: _finishLoading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Finish Walk'),
-                ),
-              ],
-            ],
-          ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildNotices({
+    required LocationSpoofState spoofState,
+    required WalkTrackingState trackingState,
+  }) {
+    final notices = <Widget>[];
+    if (trackingState.errorMessage != null) {
+      notices.add(
+        _Notice(
+          text: trackingState.errorMessage!,
+          color: AppColors.danger,
         ),
+      );
+    }
+    if (!spoofState.enabled && trackingState.serviceEnabled == false) {
+      notices.add(
+        const _Notice(
+          text: 'Location services are disabled. Enable them in Settings.',
+          color: AppColors.warning,
+        ),
+      );
+    }
+    if (!spoofState.enabled &&
+        trackingState.permissionGranted &&
+        trackingState.alwaysGranted == false) {
+      notices.add(
+        const _Notice(
+          text: 'Background location is not granted. Tracking may stop.',
+          color: AppColors.warning,
+        ),
+      );
+    }
+    if (spoofState.enabled) {
+      notices.add(
+        _Notice(
+          text: spoofState.location == null
+              ? 'Mock mode: hold 2s on the map to set your location.'
+              : 'Mock mode is active.',
+          color: AppColors.accentCool,
+        ),
+      );
+    }
+    if (trackingState.debugState != null) {
+      notices.add(
+        _Notice(
+          text: trackingState.debugState!,
+          color: AppColors.inkMuted,
+        ),
+      );
+    }
+    return notices
+        .map(
+          (notice) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: notice,
+          ),
+        )
+        .toList();
+  }
+
+  List<Widget> _buildActions(
+    BuildContext context, {
+    required WalkSession? activeWalk,
+    required bool spoofEnabled,
+    required WalkTrackingState trackingState,
+  }) {
+    final actions = <Widget>[];
+
+    if (!trackingState.permissionGranted && !spoofEnabled) {
+      actions.add(
+        AppPrimaryButton(
+          label: trackingState.isRequesting
+              ? 'Requesting Location'
+              : 'Enable Location',
+          icon: Icons.my_location,
+          isLoading: trackingState.isRequesting,
+          onPressed: trackingState.isRequesting ? null : _startTracking,
+        ),
+      );
+      actions.add(const SizedBox(height: 10));
+      actions.add(
+        OutlinedButton(
+          onPressed: _openSettings,
+          child: const Text('Open Settings'),
+        ),
+      );
+      return actions;
+    }
+
+    if (!spoofEnabled && _currentCenter == null) {
+      actions.add(
+        OutlinedButton(
+          onPressed: _startTracking,
+          child: const Text('Refresh Location'),
+        ),
+      );
+      actions.add(const SizedBox(height: 10));
+    }
+
+    if (activeWalk == null) {
+      actions.add(
+        AppPrimaryButton(
+          label: 'Back to Home',
+          icon: Icons.home_outlined,
+          onPressed: () => context.router.pop(),
+        ),
+      );
+    } else {
+      actions.add(
+        AppPrimaryButton(
+          label: 'Finish Walk',
+          icon: Icons.stop_circle_outlined,
+          isLoading: _finishLoading,
+          backgroundColor: AppColors.danger,
+          onPressed: _finishLoading ? null : _finishWalk,
+        ),
+      );
+    }
+
+    return actions;
+  }
+}
+
+class _CoordinateRow extends StatelessWidget {
+  const _CoordinateRow({required this.center});
+
+  final LatLng center;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Expanded(
+          child: _CoordinateChip(
+            label: 'LAT',
+            value: center.latitude.toStringAsFixed(5),
+            textTheme: textTheme,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _CoordinateChip(
+            label: 'LON',
+            value: center.longitude.toStringAsFixed(5),
+            textTheme: textTheme,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CoordinateChip extends StatelessWidget {
+  const _CoordinateChip({
+    required this.label,
+    required this.value,
+    required this.textTheme,
+  });
+
+  final String label;
+  final String value;
+  final TextTheme textTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.small),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: textTheme.labelMedium),
+          const SizedBox(height: 4),
+          Text(value, style: textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: color,
+            ),
+      ),
+    );
+  }
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({
+    required this.text,
+    required this.color,
+  });
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppRadii.small),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: color,
+            ),
       ),
     );
   }

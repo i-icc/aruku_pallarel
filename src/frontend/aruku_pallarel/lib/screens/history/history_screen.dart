@@ -4,6 +4,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../router/app_router.dart';
+import '../../theme/app_styles.dart';
+import '../../widgets/app_background.dart';
+import '../../widgets/app_card.dart';
 
 @RoutePage()
 class HistoryScreen extends ConsumerWidget {
@@ -16,45 +19,68 @@ class HistoryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('History'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: AppBackground(
+        safeAreaTop: false,
         child: historyAsync.when(
           data: (items) {
-            if (items.isEmpty) {
-              return const Center(
-                child: Text('No history yet.'),
-              );
-            }
             return RefreshIndicator(
               onRefresh: () =>
                   ref.read(walkHistoryListNotifierProvider.notifier).refresh(),
-              child: ListView.separated(
-                itemCount: items.length,
-                separatorBuilder: (_, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return ListTile(
-                    title: Text('Walk ID: ${item.walkId}'),
-                    subtitle: Text(
-                      'Status: ${item.status}\n'
-                      'Started: ${_formatDate(item.startedAt)}\n'
-                      'Finished: ${_formatDate(item.finishedAt)}',
+              color: AppColors.accent,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Text(
+                        'Walking history',
+                        style: Theme.of(context).textTheme.displayMedium,
+                      ),
                     ),
-                    isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      context.router.push(
-                        HistoryDetailRoute(walkId: item.walkId),
-                      );
-                    },
-                  );
-                },
+                  ),
+                  if (items.isEmpty)
+                    const SliverFillRemaining(
+                      child: Center(
+                        child: Text('No history yet.'),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverToBoxAdapter(
+                        child: AppCard(
+                          padding: EdgeInsets.zero,
+                          child: Column(
+                            children: [
+                              for (var i = 0; i < items.length; i++) ...[
+                                _HistoryRow(
+                                  walkId: items[i].walkId,
+                                  status: items[i].status,
+                                  startedAt: _formatDate(items[i].startedAt),
+                                  finishedAt: _formatDate(items[i].finishedAt),
+                                  onTap: () {
+                                    context.router.push(
+                                      HistoryDetailRoute(
+                                        walkId: items[i].walkId,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                if (i != items.length - 1)
+                                  const Divider(height: 1),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                ],
               ),
             );
           },
-          loading: () => const Center(
-            child: CircularProgressIndicator(),
-          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -86,5 +112,54 @@ class HistoryScreen extends ConsumerWidget {
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     return '$year-$month-$day $hour:$minute';
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({
+    required this.walkId,
+    required this.status,
+    required this.startedAt,
+    required this.finishedAt,
+    required this.onTap,
+  });
+
+  final String walkId;
+  final String status;
+  final String startedAt;
+  final String finishedAt;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.route, size: 20, color: AppColors.inkMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Walk ID: $walkId', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 6),
+                  Text('Status: $status', style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Text('Started: $startedAt', style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Text('Finished: $finishedAt', style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.inkMuted),
+          ],
+        ),
+      ),
+    );
   }
 }

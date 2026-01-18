@@ -8,6 +8,10 @@ import '../../env/env.dart';
 import '../../features/authentication/provider/user_profile_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../router/app_router.dart';
+import '../../theme/app_styles.dart';
+import '../../widgets/app_background.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_primary_button.dart';
 
 @RoutePage()
 class LoginScreen extends ConsumerStatefulWidget {
@@ -140,62 +144,94 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Login'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
+      body: AppBackground(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Sign in',
+                  style: theme.textTheme.displayMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Keep your walking timeline in sync.',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                AppCard(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(labelText: 'Email'),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _nicknameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nickname (Sign Up)',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _passwordController,
+                        decoration: const InputDecoration(labelText: 'Password'),
+                        obscureText: true,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withValues(alpha: 0.08),
+                            borderRadius:
+                                BorderRadius.circular(AppRadii.small),
+                            border: Border.all(
+                              color: AppColors.danger.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            _error!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.danger,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      AppPrimaryButton(
+                        label: 'Sign In',
+                        icon: Icons.login,
+                        isLoading: _isLoading,
+                        onPressed: _isLoading ? null : _signIn,
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton(
+                        onPressed: _isLoading ? null : _signUp,
+                        child: const Text('Sign Up'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Backend: ${Env.backendBaseUrl}',
+                  style: theme.textTheme.labelMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nicknameController,
-              decoration: const InputDecoration(
-                labelText: 'Nickname (Sign Up)',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-            ),
-            const SizedBox(height: 16),
-            if (_error != null) ...[
-              Text(
-                _error!,
-                style: const TextStyle(color: Colors.red),
-              ),
-              const SizedBox(height: 8),
-            ],
-            ElevatedButton(
-              onPressed: _isLoading ? null : _signIn,
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Sign In'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _isLoading ? null : _signUp,
-              child: const Text('Sign Up'),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Backend: ${Env.backendBaseUrl}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+          ),
         ),
       ),
     );

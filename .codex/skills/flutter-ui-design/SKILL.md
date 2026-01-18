@@ -1,3 +1,4 @@
+---
 name: flutter-crafted-ui
 description: Architect bespoke, high-fidelity Flutter interfaces that reject generic "AI-generated" aesthetics. Use this skill to build visually distinct widgets, screens, or apps that prioritize architectural layouts, unique typography, and organic textures over standard Material/Cupertino defaults.
 ---

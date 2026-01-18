@@ -23,7 +23,10 @@ class BaseScreen extends ConsumerWidget {
             onTap: tabsRouter.setActiveIndex,
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.home), label: 'HOME'),
-              BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'SETTINGS'),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.settings),
+                label: 'SETTINGS',
+              ),
             ],
           );
         },

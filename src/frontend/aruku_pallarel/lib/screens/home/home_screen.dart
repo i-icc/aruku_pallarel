@@ -11,6 +11,11 @@ import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../router/app_router.dart';
+import '../../theme/app_styles.dart';
+import '../../widgets/app_background.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/app_primary_button.dart';
+import '../../widgets/app_reveal.dart';
 
 @RoutePage()
 class HomeScreen extends StatelessWidget {
@@ -138,71 +143,260 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileNotifierProvider);
     final activeWalk = ref.watch(activeWalkNotifierProvider);
+    final spoofState = ref.watch(locationSpoofNotifierProvider);
+    final theme = Theme.of(context);
+
+    final nickname = profile.when(
+      data: (value) => value?.nickname ?? 'Guest',
+      loading: () => 'Loading...',
+      error: (error, stackTrace) => 'Unavailable',
+    );
+
+    final walkValue = activeWalk == null ? 'Idle' : 'Active';
+    final walkSubtitle =
+        activeWalk == null ? 'No active session' : 'ID: ${activeWalk.walkId}';
+
+    final locationValue = spoofState.enabled ? 'Mocked' : 'Live';
+    final locationSubtitle = spoofState.enabled
+        ? (spoofState.location == null ? 'Set from map' : 'Pinned on map')
+        : 'Tracking on device';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
+        actions: [
+          IconButton(
+            onPressed: () => context.router.push(const HistoryRoute()),
+            icon: const Icon(Icons.history),
+            tooltip: 'History',
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Home (empty)',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            profile.when(
-              data: (value) {
-                if (value == null) {
-                  return const Text('Nickname: -');
-                }
-                return Text('Nickname: ${value.nickname}');
-              },
-              loading: () => const Text('Nickname: loading...'),
-              error: (error, _) => Text('Nickname: error (${error.toString()})'),
-            ),
-            const SizedBox(height: 12),
-            if (activeWalk != null) ...[
-              Text('Active Walk: ${activeWalk.walkId}'),
-              const SizedBox(height: 12),
+      body: AppBackground(
+        safeAreaTop: false,
+        child: RefreshIndicator(
+          onRefresh: _refreshStatus,
+          color: AppColors.accent,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: AppReveal(
+                    delay: const Duration(milliseconds: 80),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hello, $nickname',
+                          style: theme.textTheme.displayMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          activeWalk == null
+                              ? 'Ready for a short walk?'
+                              : 'Your last walk is still active.',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: AppPrimaryButton(
+                    label: activeWalk == null ? 'Start Walk' : 'Continue Walk',
+                    icon: activeWalk == null
+                        ? Icons.play_arrow
+                        : Icons.directions_walk,
+                    isLoading: _walkLoading,
+                    onPressed: _walkLoading
+                        ? null
+                        : () async {
+                            if (activeWalk != null) {
+                              await context.router.push(const WalkRoute());
+                              return;
+                            }
+                            await _startWalk();
+                          },
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Text('STATUS', style: theme.textTheme.labelLarge),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _StatusRow(
+                          icon: Icons.person_outline,
+                          title: 'Account',
+                          value: nickname,
+                          subtitle: 'Signed in',
+                        ),
+                        const Divider(height: 1),
+                        _StatusRow(
+                          icon: Icons.directions_walk,
+                          title: 'Walk',
+                          value: walkValue,
+                          subtitle: walkSubtitle,
+                        ),
+                        const Divider(height: 1),
+                        _StatusRow(
+                          icon: Icons.cloud_outlined,
+                          title: 'Firestore',
+                          value: _firestoreStatus,
+                          subtitle: _loading ? 'Checking...' : 'Pull to refresh',
+                        ),
+                        const Divider(height: 1),
+                        _StatusRow(
+                          icon: Icons.my_location,
+                          title: 'Location',
+                          value: locationValue,
+                          subtitle: locationSubtitle,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Text('SHORTCUTS', style: theme.textTheme.labelLarge),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _ShortcutRow(
+                          icon: Icons.map_outlined,
+                          title: 'History',
+                          subtitle: 'Past routes',
+                          onTap: () =>
+                              context.router.push(const HistoryRoute()),
+                        ),
+                        const Divider(height: 1),
+                        _ShortcutRow(
+                          icon: Icons.chat_bubble_outline,
+                          title: 'Chat',
+                          subtitle: 'Ask the guide',
+                          onTap: () => context.router.push(const ChatRoute()),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
-            ElevatedButton(
-              onPressed: _walkLoading
-                  ? null
-                  : () async {
-                      if (activeWalk != null) {
-                        await context.router.push(const WalkRoute());
-                        return;
-                      }
-                      await _startWalk();
-                    },
-              child: _walkLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(activeWalk == null ? 'Start Walk' : 'Continue Walk'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusRow extends StatelessWidget {
+  const _StatusRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.inkMuted),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.labelMedium),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: theme.textTheme.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => context.router.push(const HistoryRoute()),
-              child: const Text('History'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShortcutRow extends StatelessWidget {
+  const _ShortcutRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.inkMuted, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: theme.textTheme.bodySmall),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Text('Firestore: $_firestoreStatus'),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _loading ? null : _refreshStatus,
-              child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Refresh'),
-            ),
+            const Icon(Icons.chevron_right, color: AppColors.inkMuted),
           ],
         ),
       ),
