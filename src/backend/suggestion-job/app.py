@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+import time
 
 from flask import Flask, jsonify, request
 
@@ -11,6 +13,17 @@ app = Flask(__name__)
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 PORT = int(os.getenv("PORT", "8080"))
+REQUEST_LOG_BODY_LIMIT = int(os.getenv("REQUEST_LOG_BODY_LIMIT", "2000"))
+
+
+def _truncate_payload(payload):
+    try:
+        text = json.dumps(payload, ensure_ascii=True)
+    except (TypeError, ValueError):
+        text = str(payload)
+    if len(text) > REQUEST_LOG_BODY_LIMIT:
+        return f"{text[:REQUEST_LOG_BODY_LIMIT]}...(truncated)"
+    return text
 
 
 def _request_repo():
@@ -26,6 +39,49 @@ def index():
 @app.get("/health")
 def health():
     return jsonify(status="ok")
+
+
+@app.before_request
+def log_request():
+    request._start_time = time.monotonic()
+    payload = request.get_json(silent=True)
+    if payload is None:
+        app.logger.info("request %s %s", request.method, request.path)
+    else:
+        app.logger.info(
+            "request %s %s payload=%s",
+            request.method,
+            request.path,
+            _truncate_payload(payload),
+        )
+
+
+@app.after_request
+def log_response(response):
+    duration_ms = None
+    if hasattr(request, "_start_time"):
+        duration_ms = int((time.monotonic() - request._start_time) * 1000)
+    payload = None
+    if response.mimetype == "application/json":
+        payload = response.get_json(silent=True)
+    if payload is None:
+        app.logger.info(
+            "response %s %s status=%s duration_ms=%s",
+            request.method,
+            request.path,
+            response.status_code,
+            duration_ms,
+        )
+    else:
+        app.logger.info(
+            "response %s %s status=%s duration_ms=%s payload=%s",
+            request.method,
+            request.path,
+            response.status_code,
+            duration_ms,
+            _truncate_payload(payload),
+        )
+    return response
 
 
 @app.post("/jobs/suggestions")
