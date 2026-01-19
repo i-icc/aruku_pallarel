@@ -10,12 +10,13 @@ services:
       - "8000:8080"
     depends_on:
       - firebase
+      - suggestion-job
       - tasks-stub
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 10
+      retries: 3
 
   tasks-stub:
     build:
@@ -26,9 +27,26 @@ services:
       - "7070:7070"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:7070/health"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 10
+      retries: 3
+
+  suggestion-job:
+    build:
+      context: ../src/backend/suggestion-job
+    env_file:
+      - ../src/backend/main-backend-server/.env.local
+    volumes:
+      - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
+    ports:
+      - "8001:8080"
+    depends_on:
+      - firebase
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   firebase:
     build:

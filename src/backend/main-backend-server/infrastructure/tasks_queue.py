@@ -23,7 +23,7 @@ class TasksQueueClient:
     def __init__(self, tasks_stub_url=None, target_url=None, timeout_seconds=None):
         self._tasks_stub_url = tasks_stub_url or os.getenv("TASKS_STUB_URL")
         self._target_url = target_url or os.getenv(
-            "TASKS_TARGET_URL", "http://backend:8080/internal/task-handler"
+            "TASKS_TARGET_URL", "http://suggestion-job:8080/jobs/suggestions"
         )
         self._timeout_seconds = int(
             timeout_seconds or os.getenv("TASKS_STUB_TIMEOUT_SECONDS", "10")

@@ -1,0 +1,10 @@
+[project]
+name = "machi-danjon-suggestion-job"
+version = "0.1.0"
+description = "Suggestion job worker for machi-danjon."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "firebase-admin>=6.4.0",
+    "flask>=3.0.3",
+]

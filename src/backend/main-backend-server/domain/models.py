@@ -9,6 +9,13 @@ class Location:
 
 
 @dataclass(frozen=True)
+class LocationPoint:
+    lat: float
+    lon: float
+    timestamp: datetime
+
+
+@dataclass(frozen=True)
 class User:
     user_id: str
     nickname: str | None
@@ -37,4 +44,5 @@ class Walk:
 @dataclass(frozen=True)
 class SuggestionRequestResult:
     result: str
+    request_id: str | None
     reason: str | None
