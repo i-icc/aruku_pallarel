@@ -21,6 +21,7 @@
 - 仕様変更は `spec/` を先に更新し、`README.md` は概要とリンクのみに反映する
 - `spec/` 内に新規ドキュメントを追加したら `spec/README.md` に追記する
 - ローカルの Backend/Emulator/Tasks スタブは `infrastructure/docker-compose.yml` を使用する
+- ローカルの OSM スタブも `infrastructure/docker-compose.yml` を使用する
 - Backend/Suggestion Job は Docker Compose でホットリロードを有効化する（`infrastructure/docker-compose.yml` の bind mount + Flask debug）
 - Backend/ADK は `uv` で依存管理し、起動・開発は Docker Compose を優先する
 - Backend/ADK の `pyproject.toml`/`README.md` は各ディレクトリで独立管理する

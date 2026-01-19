@@ -8,3 +8,8 @@ dependencies = [
     "firebase-admin>=6.4.0",
     "flask>=3.0.3",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+]
