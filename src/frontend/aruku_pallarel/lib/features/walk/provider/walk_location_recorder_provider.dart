@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -370,19 +371,38 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
     _requestInFlight = true;
     try {
+      await _ensureFlushed();
+      _debugLog(
+        'suggestion_request send walkId=$walkId distance=${_distanceSinceRequest.toStringAsFixed(1)}m',
+      );
       final api = ref.read(walkApiProvider);
       final result = await api.requestSuggestion(walkId);
+      _debugLog(
+        'suggestion_request result=${result.result} requestId=${result.requestId ?? '-'}',
+      );
       if (result.isOk) {
         _lastRequestOkAt = now;
         _distanceSinceRequest = 0;
         _lastDistancePoint = point;
       }
     } on BackendException catch (error) {
+      _debugLog('suggestion_request error=${error.code}');
       state = state.copyWith(errorMessage: error.message);
     } catch (error) {
+      _debugLog('suggestion_request error=$error');
       state = state.copyWith(errorMessage: error.toString());
     } finally {
       _requestInFlight = false;
+    }
+  }
+
+  Future<void> _ensureFlushed() async {
+    if (_flushInProgress && _flushFuture != null) {
+      await _flushFuture;
+      return;
+    }
+    if (_buffer.isNotEmpty) {
+      await _flushBuffer();
     }
   }
 
@@ -405,4 +425,11 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
   }
 
   double _toRadians(double degree) => degree * (pi / 180);
+
+  void _debugLog(String message) {
+    assert(() {
+      debugPrint(message);
+      return true;
+    }());
+  }
 }

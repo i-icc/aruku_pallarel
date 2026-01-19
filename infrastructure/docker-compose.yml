@@ -5,9 +5,25 @@ services:
     env_file:
       - ../src/backend/main-backend-server/.env.local
     volumes:
+      - ../src/backend/main-backend-server:/app
       - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
     ports:
       - "8000:8080"
+    command:
+      [
+        "uv",
+        "run",
+        "--",
+        "flask",
+        "--app",
+        "app",
+        "run",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--debug"
+      ]
     depends_on:
       - firebase
       - suggestion-job
@@ -37,9 +53,25 @@ services:
     env_file:
       - ../src/backend/main-backend-server/.env.local
     volumes:
+      - ../src/backend/suggestion-job:/app
       - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
     ports:
       - "8001:8080"
+    command:
+      [
+        "uv",
+        "run",
+        "--",
+        "flask",
+        "--app",
+        "app",
+        "run",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--debug"
+      ]
     depends_on:
       - firebase
     healthcheck:

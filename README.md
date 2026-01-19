@@ -41,6 +41,7 @@ fvm flutter test
 ```bash
 docker compose -f infrastructure/docker-compose.yml up -d backend
 ```
+ローカルではコード変更で自動リロードされます。
 ADC の設定が必要です。詳細は `src/backend/main-backend-server/README.md` を参照してください。
 
 ## リポジトリ構成
