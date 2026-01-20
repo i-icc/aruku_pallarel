@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "src/backend/main-backend-server/**"
+      - "src/backend/sanpo-agent/**"
+      - ".github/workflows/gar-push.yml"
   workflow_dispatch:
 
 permissions:
@@ -18,14 +22,82 @@ env:
   GCP_WIF_SERVICE_ACCOUNT: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
 jobs:
-  build:
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      sanpo_agent: ${{ steps.filter.outputs.sanpo_agent }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set Short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - "src/backend/main-backend-server/**"
+            sanpo_agent:
+              - "src/backend/sanpo-agent/**"
+
+  backend:
+    name: Build & Push backend
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate GCP settings
+        run: |
+          missing=()
+          for name in GCP_PROJECT_ID GCP_REGION GAR_REPOSITORY GCP_WIF_PROVIDER GCP_WIF_SERVICE_ACCOUNT; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+          fi
+        done
+        if [ "${#missing[@]}" -ne 0 ]; then
+            echo "Missing required GitHub Actions vars/secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Auth with Workload Identity
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GCP_REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: src/backend/main-backend-server
+          push: true
+          tags: |
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/backend:latest
+
+  sanpo-agent:
+    name: Build & Push sanpo-agent
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.sanpo_agent == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Validate GCP settings
         run: |
@@ -58,20 +130,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push backend
-        uses: docker/build-push-action@v6
-        with:
-          context: src/backend/main-backend-server
-          push: true
-          tags: |
-            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/backend:sha-${{ env.SHORT_SHA }}
-            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/backend:latest
-
       - name: Build and Push sanpo-agent
         uses: docker/build-push-action@v6
         with:
           context: src/backend/sanpo-agent
           push: true
           tags: |
-            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/sanpo-agent:sha-${{ env.SHORT_SHA }}
             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/sanpo-agent:latest
