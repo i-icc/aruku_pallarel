@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'location_spoof_provider.dart';
+import '../infrastructure/walk_api.dart';
+import '../../share/services/backend_exception.dart';
 
 part 'walk_location_recorder_provider.g.dart';
 
@@ -49,6 +53,8 @@ class _LocationPoint {
 @Riverpod(keepAlive: true)
 class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
   static const int _maxBatchSize = 64;
+  static const Duration _suggestionCooldown = Duration(minutes: 5);
+  static const double _suggestionMinDistanceMeters = 250;
 
   StreamSubscription<locus.Location>? _subscription;
   final List<_LocationPoint> _buffer = [];
@@ -60,6 +66,10 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
   int _currentBatchCount = 0;
   String? _walkId;
   String? _userId;
+  bool _requestInFlight = false;
+  double _distanceSinceRequest = 0;
+  DateTime? _lastRequestOkAt;
+  _LocationPoint? _lastDistancePoint;
 
   @override
   WalkLocationRecorderState build() {
@@ -85,6 +95,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
     _walkId = walkId;
     _userId = user.uid;
+    _resetSuggestionState();
     await _loadLatestBatch(user.uid, walkId);
     state = state.copyWith(isRecording: true, errorMessage: null);
 
@@ -105,6 +116,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
           ),
         );
         state = state.copyWith(bufferCount: _buffer.length);
+        _handleSuggestionTrigger(_buffer.last);
         _requestFlush();
       },
       onError: (error) {
@@ -125,6 +137,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       ),
     );
     state = state.copyWith(bufferCount: _buffer.length);
+    _handleSuggestionTrigger(_buffer.last);
     _requestFlush();
   }
 
@@ -141,6 +154,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     }
     _buffer.clear();
     _resetBatchState();
+    _resetSuggestionState();
     _walkId = null;
     _userId = null;
     state = state.copyWith(isRecording: false, bufferCount: 0);
@@ -304,5 +318,118 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
   void _dispose() {
     _subscription?.cancel();
+  }
+
+  void _resetSuggestionState() {
+    _requestInFlight = false;
+    _distanceSinceRequest = 0;
+    _lastDistancePoint = null;
+    _lastRequestOkAt = null;
+  }
+
+  void _handleSuggestionTrigger(_LocationPoint point) {
+    if (!state.isRecording || _walkId == null) {
+      return;
+    }
+
+    _updateDistance(point);
+    _maybeRequestSuggestion(point);
+  }
+
+  void _updateDistance(_LocationPoint point) {
+    final lastPoint = _lastDistancePoint;
+    if (lastPoint == null) {
+      _lastDistancePoint = point;
+      return;
+    }
+    _distanceSinceRequest += _haversineDistanceMeters(
+      lastPoint.latitude,
+      lastPoint.longitude,
+      point.latitude,
+      point.longitude,
+    );
+    _lastDistancePoint = point;
+  }
+
+  Future<void> _maybeRequestSuggestion(_LocationPoint point) async {
+    if (_requestInFlight) {
+      return;
+    }
+    final walkId = _walkId;
+    if (walkId == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final baseline = _lastRequestOkAt;
+    if (baseline != null && now.difference(baseline) < _suggestionCooldown) {
+      return;
+    }
+    if (_distanceSinceRequest < _suggestionMinDistanceMeters) {
+      return;
+    }
+
+    _requestInFlight = true;
+    try {
+      await _ensureFlushed();
+      _debugLog(
+        'suggestion_request send walkId=$walkId distance=${_distanceSinceRequest.toStringAsFixed(1)}m',
+      );
+      final api = ref.read(walkApiProvider);
+      final result = await api.requestSuggestion(walkId);
+      _debugLog(
+        'suggestion_request result=${result.result} requestId=${result.requestId ?? '-'}',
+      );
+      if (result.isOk) {
+        _lastRequestOkAt = now;
+        _distanceSinceRequest = 0;
+        _lastDistancePoint = point;
+      }
+    } on BackendException catch (error) {
+      _debugLog('suggestion_request error=${error.code}');
+      state = state.copyWith(errorMessage: error.message);
+    } catch (error) {
+      _debugLog('suggestion_request error=$error');
+      state = state.copyWith(errorMessage: error.toString());
+    } finally {
+      _requestInFlight = false;
+    }
+  }
+
+  Future<void> _ensureFlushed() async {
+    if (_flushInProgress && _flushFuture != null) {
+      await _flushFuture;
+      return;
+    }
+    if (_buffer.isNotEmpty) {
+      await _flushBuffer();
+    }
+  }
+
+  double _haversineDistanceMeters(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const radius = 6371000;
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+    final lat1Rad = _toRadians(lat1);
+    final lat2Rad = _toRadians(lat2);
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1Rad) * cos(lat2Rad) * sin(dLon / 2) * sin(dLon / 2);
+    final c = 2 * asin(sqrt(a));
+    return radius * c;
+  }
+
+  double _toRadians(double degree) => degree * (pi / 180);
+
+  void _debugLog(String message) {
+    assert(() {
+      debugPrint(message);
+      return true;
+    }());
   }
 }

@@ -12,7 +12,12 @@ class UserRepository(Protocol):
     def get_user(self, user_id: str) -> dict | None:
         raise NotImplementedError
 
-    def update_user(self, user_id: str, nickname: str) -> None:
+    def update_user(
+        self,
+        user_id: str,
+        nickname: str | None = None,
+        fcm_token: str | None = None,
+    ) -> None:
         raise NotImplementedError
 
     def delete_user(self, user_id: str) -> None:
@@ -57,13 +62,18 @@ def get_user(repo: UserRepository, user_id: str) -> User:
 def update_user(
     repo: UserRepository,
     user_id: str,
-    nickname: str,
+    nickname: str | None,
+    fcm_token: str | None,
     now: datetime,
 ) -> UserUpdateResult:
-    repo.update_user(user_id, nickname)
+    if nickname is None and fcm_token is None:
+        raise AppError("INVALID_ARGUMENT", "update payload is required", 400)
+
+    repo.update_user(user_id, nickname=nickname, fcm_token=fcm_token)
     return UserUpdateResult(
         user_id=user_id,
         nickname=nickname,
+        fcm_token=fcm_token,
         updated_at=now,
     )
 

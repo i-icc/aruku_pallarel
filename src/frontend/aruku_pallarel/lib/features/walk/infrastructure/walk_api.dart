@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../share/provider/dio_client_provider.dart';
 import '../../share/services/backend_exception.dart';
+import '../models/suggestion_request_result.dart';
 import '../models/walk_session.dart';
 
 part 'walk_api.g.dart';
@@ -40,6 +41,20 @@ class WalkApi {
       final data = response.data;
       if (data is Map<String, dynamic>) {
         return WalkSession.fromJson(data);
+      }
+      throw BackendException('INVALID_RESPONSE', 'Invalid response format.');
+    } on DioException catch (error) {
+      throw backendExceptionFromDio(error);
+    }
+  }
+
+  Future<SuggestionRequestResult> requestSuggestion(String walkId) async {
+    try {
+      final response =
+          await _dio.post('/v1/walks/$walkId/suggestions:request');
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return SuggestionRequestResult.fromJson(data);
       }
       throw BackendException('INVALID_RESPONSE', 'Invalid response format.');
     } on DioException catch (error) {

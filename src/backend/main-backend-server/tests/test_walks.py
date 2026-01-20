@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import api.walks as walks_api
 import firebase_client
+from firebase_admin import firestore
 
 
 def auth_header():
@@ -143,6 +144,18 @@ def test_walks_suggestions_request_enqueues(client, fake_firestore, monkeypatch)
     fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
         "status": "active",
         "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+        "startLocation": firestore.GeoPoint(35.0, 139.0),
+    }
+    fake_firestore._store[
+        ("users", "user-123", "walks", "walk-1", "locations", "batch-1")
+    ] = {
+        "index": 1,
+        "points": [
+            {
+                "timestamp": datetime(2026, 1, 12, tzinfo=timezone.utc),
+                "geo": firestore.GeoPoint(35.003, 139.0),
+            }
+        ],
     }
 
     response = client.post(
@@ -153,12 +166,16 @@ def test_walks_suggestions_request_enqueues(client, fake_firestore, monkeypatch)
 
     assert response.status_code == 200
     assert response.json["result"] == "ok"
-    assert response.json["reason"] is None
+    assert response.json["requestId"]
     assert calls
     assert calls[0]["walkId"] == "walk-1"
-    assert fake_firestore._store[("users", "user-123", "walks", "walk-1")][
-        "lastSuggestionAt"
-    ] == datetime(2026, 1, 12, tzinfo=timezone.utc)
+    assert calls[0]["requestId"] == response.json["requestId"]
+    assert (
+        fake_firestore._store[("requests", response.json["requestId"])][
+            "status"
+        ]
+        == "queued"
+    )
 
 
 def test_walks_suggestions_request_cooldown(client, fake_firestore, monkeypatch):
@@ -186,7 +203,13 @@ def test_walks_suggestions_request_cooldown(client, fake_firestore, monkeypatch)
     fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
         "status": "active",
         "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
-        "lastSuggestionAt": last_time,
+    }
+    fake_firestore._store[("requests", "request-1")] = {
+        "requestId": "request-1",
+        "userId": "user-123",
+        "walkId": "walk-1",
+        "requestedAt": last_time,
+        "status": "done",
     }
 
     response = client.post(
@@ -196,11 +219,54 @@ def test_walks_suggestions_request_cooldown(client, fake_firestore, monkeypatch)
 
     assert response.status_code == 200
     assert response.json["result"] == "ng"
-    assert response.json["reason"] == "cooldown"
+    assert "requestId" not in response.json
     assert called["count"] == 0
-    assert (
-        fake_firestore._store[("users", "user-123", "walks", "walk-1")][
-            "lastSuggestionAt"
-        ]
-        == last_time
+
+
+def test_walks_suggestions_request_distance_short(client, fake_firestore, monkeypatch):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123", "email": "test@example.com"},
     )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    called = {"count": 0}
+
+    class FakeQueue:
+        def enqueue_suggestion(self, payload):
+            called["count"] += 1
+            return True
+
+    monkeypatch.setattr(walks_api, "_tasks_queue", lambda: FakeQueue())
+
+    fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
+        "status": "active",
+        "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+        "startLocation": firestore.GeoPoint(35.0, 139.0),
+    }
+    fake_firestore._store[
+        ("users", "user-123", "walks", "walk-1", "locations", "batch-1")
+    ] = {
+        "index": 1,
+        "points": [
+            {
+                "timestamp": datetime(2026, 1, 12, tzinfo=timezone.utc),
+                "geo": firestore.GeoPoint(35.0005, 139.0),
+            }
+        ],
+    }
+
+    response = client.post(
+        "/v1/walks/walk-1/suggestions:request",
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["result"] == "ng"
+    assert "requestId" not in response.json
+    assert called["count"] == 0

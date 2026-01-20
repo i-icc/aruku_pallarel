@@ -92,3 +92,32 @@ variable "job_image" {
   description = "Container image for job."
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
+
+variable "github_repository" {
+  type        = string
+  description = "GitHub repository in owner/repo format for WIF."
+}
+
+variable "github_branch" {
+  type        = string
+  description = "GitHub branch allowed for WIF."
+  default     = "main"
+}
+
+variable "github_wif_pool_id" {
+  type        = string
+  description = "Workload Identity Pool ID for GitHub Actions."
+  default     = "github-actions"
+}
+
+variable "github_wif_provider_id" {
+  type        = string
+  description = "Workload Identity Provider ID for GitHub Actions."
+  default     = "github-actions"
+}
+
+variable "github_actions_sa_id" {
+  type        = string
+  description = "Service account ID for GitHub Actions."
+  default     = "github-actions-ci"
+}

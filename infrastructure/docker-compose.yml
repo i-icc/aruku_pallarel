@@ -5,17 +5,34 @@ services:
     env_file:
       - ../src/backend/main-backend-server/.env.local
     volumes:
+      - ../src/backend/main-backend-server:/app
       - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
     ports:
       - "8000:8080"
+    command:
+      [
+        "uv",
+        "run",
+        "--",
+        "flask",
+        "--app",
+        "app",
+        "run",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--debug"
+      ]
     depends_on:
       - firebase
+      - suggestion-job
       - tasks-stub
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 10
+      retries: 3
 
   tasks-stub:
     build:
@@ -26,9 +43,89 @@ services:
       - "7070:7070"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:7070/health"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 10
+      retries: 3
+
+  suggestion-job:
+    build:
+      context: ../src/backend/main-backend-server
+    env_file:
+      - ../src/backend/main-backend-server/.env.local
+      - ../src/backend/main-backend-server/.env.job.local
+    volumes:
+      - ../src/backend/main-backend-server:/app
+      - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
+    ports:
+      - "8001:8080"
+    command:
+      [
+        "uv",
+        "run",
+        "--",
+        "flask",
+        "--app",
+        "app",
+        "run",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--debug"
+      ]
+    depends_on:
+      - firebase
+      - sanpo-agent
+      - osm-stub
+
+  sanpo-agent:
+    build:
+      context: ../src/backend/sanpo-agent
+    env_file:
+      - ../src/backend/sanpo-agent/.env.local
+    environment:
+      - PORT=8080
+      - ADK_AGENTS_DIR=/app
+    volumes:
+      - ../src/backend/sanpo-agent:/app
+      - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
+    ports:
+      - "8020:8080"
+    command:
+      [
+        "uv",
+        "run",
+        "--",
+        "uvicorn",
+        "app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--reload",
+        "--reload-dir",
+        "/app"
+      ]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  osm-stub:
+    build:
+      context: ../src/backend/osm-stub
+    environment:
+      - PORT=8080
+    volumes:
+      - ../src/backend/osm-stub:/app
+    ports:
+      - "8010:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   firebase:
     build:

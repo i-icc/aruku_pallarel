@@ -58,18 +58,37 @@ def get_me_handler():
 def update_me_handler():
     payload = request.get_json(silent=True) or {}
     nickname = payload.get("nickname")
-    if not nickname:
+    fcm_token = payload.get("fcmToken")
+    if nickname is not None and not isinstance(nickname, str):
+        raise AppError("INVALID_ARGUMENT", "nickname must be string", 400)
+    if isinstance(nickname, str) and not nickname.strip():
         raise AppError("INVALID_ARGUMENT", "nickname is required", 400)
+    if fcm_token is not None and not isinstance(fcm_token, str):
+        raise AppError("INVALID_ARGUMENT", "fcmToken must be string", 400)
+    if isinstance(fcm_token, str) and not fcm_token.strip():
+        raise AppError("INVALID_ARGUMENT", "fcmToken is required", 400)
+    if nickname is None and fcm_token is None:
+        raise AppError("INVALID_ARGUMENT", "update payload is required", 400)
 
     user_id = current_user_id()
     now = datetime.now(timezone.utc)
 
-    result = update_user(_user_repo(), user_id, nickname, now)
-    return jsonify(
-        userId=result.user_id,
-        nickname=result.nickname,
-        updatedAt=to_rfc3339(result.updated_at),
+    result = update_user(
+        _user_repo(),
+        user_id,
+        nickname.strip() if isinstance(nickname, str) else None,
+        fcm_token.strip() if isinstance(fcm_token, str) else None,
+        now,
     )
+    response = {
+        "userId": result.user_id,
+        "updatedAt": to_rfc3339(result.updated_at),
+    }
+    if result.nickname is not None:
+        response["nickname"] = result.nickname
+    if result.fcm_token is not None:
+        response["fcmToken"] = result.fcm_token
+    return jsonify(response)
 
 
 @users_api.delete("/users/me")
