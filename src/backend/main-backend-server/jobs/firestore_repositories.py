@@ -33,6 +33,17 @@ class FirestoreSuggestionRequestRepository:
         self._requests_ref().document(request_id).set(data, merge=True)
 
 
+class FirestoreUserRepository:
+    def __init__(self, db):
+        self._db = db
+
+    def get_user(self, user_id):
+        snapshot = self._db.collection("users").document(user_id).get()
+        if not snapshot.exists:
+            return None
+        return snapshot.to_dict() or {}
+
+
 class FirestoreWalkRepository:
     def __init__(self, db):
         self._db = db
@@ -81,6 +92,65 @@ class FirestoreWalkRepository:
 
         flattened.sort(key=lambda entry: entry.timestamp)
         return flattened
+
+
+class FirestoreChatRepository:
+    def __init__(self, db):
+        self._db = db
+
+    def _chat_ref(self, user_id, walk_id):
+        return (
+            self._db.collection("users")
+            .document(user_id)
+            .collection("walks")
+            .document(walk_id)
+            .collection("chat")
+        )
+
+    def create_message(
+        self,
+        user_id,
+        walk_id,
+        chat_id,
+        message,
+        url=None,
+        suggest_id=None,
+    ):
+        data = {
+            "chatId": chat_id,
+            "senderType": "system",
+            "message": message,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+        }
+        if url:
+            data["url"] = url
+        if suggest_id:
+            data["suggestId"] = suggest_id
+        self._chat_ref(user_id, walk_id).document(chat_id).set(data)
+
+
+class FirestoreSuggestRepository:
+    def __init__(self, db):
+        self._db = db
+
+    def _suggests_ref(self, user_id, walk_id):
+        return (
+            self._db.collection("users")
+            .document(user_id)
+            .collection("walks")
+            .document(walk_id)
+            .collection("suggests")
+        )
+
+    def create_suggest(self, user_id, walk_id, suggest_id, message_id, lat, lon):
+        self._suggests_ref(user_id, walk_id).document(suggest_id).set(
+            {
+                "suggestId": suggest_id,
+                "suggestedAt": firestore.SERVER_TIMESTAMP,
+                "messageId": message_id,
+                "geo": firestore.GeoPoint(lat, lon),
+            }
+        )
 
 
 def _extract_lat_lon(value):
