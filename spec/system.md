@@ -141,6 +141,7 @@ sequenceDiagram
 - IaC は Terraform を使用し、Cloud Run（Backend/ADK/OSM/Job）、Cloud Tasks、Firestore、Auth、FCM などを管理する
 - ローカル開発では Firestore Emulator / Auth Emulator を優先利用し、Task や外部呼び出しはスタブ/モックで代替する。可能な範囲で emulator を使い、実サービス呼び出しを最小化する
 - Cloud Run サービス/Job は共通で VPC Direct Egress（private ranges only）を有効化し、Vertex AI などの外部エンドポイントへの到達を統制する
+- Backend/Job は同一イメージを利用し、Job エンドポイントは環境変数で有効化する（ローカルは `ENABLE_JOB_ENDPOINTS=true` ）
 
 ### Terraform 運用手順（手作業）
 1. GCP プロジェクトを作成し、課金アカウントを紐付ける

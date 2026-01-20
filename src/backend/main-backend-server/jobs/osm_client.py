@@ -4,7 +4,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-from location_models import LocationPoint
+from .location_models import LocationPoint
 
 
 class OsmClient:

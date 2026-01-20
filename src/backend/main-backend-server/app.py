@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 from api.internal import internal_api
+from api.jobs import jobs_api
 from api.users import users_api
 from api.walks import walks_api
 from domain.errors import AppError
@@ -18,6 +19,11 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 PORT = int(os.getenv("PORT", "8080"))
 REQUEST_LOG_BODY_LIMIT = int(os.getenv("REQUEST_LOG_BODY_LIMIT", "2000"))
+ENABLE_JOB_ENDPOINTS = os.getenv("ENABLE_JOB_ENDPOINTS", "")
+
+
+def _is_truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _truncate_payload(payload):
@@ -103,6 +109,8 @@ def log_response(response):
 app.register_blueprint(users_api)
 app.register_blueprint(walks_api)
 app.register_blueprint(internal_api)
+if _is_truthy(ENABLE_JOB_ENDPOINTS):
+    app.register_blueprint(jobs_api)
 
 
 if __name__ == "__main__":

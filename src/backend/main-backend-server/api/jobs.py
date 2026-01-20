@@ -1,44 +1,25 @@
-import json
-import logging
-import os
-import time
+from flask import Blueprint, jsonify, request
 
-from flask import Flask, jsonify, request
-
-import firebase_client
-from candidate_selector import select_candidate
-from firestore_repositories import (
+from firebase_client import get_firestore_client
+from jobs.adk_client import AdkClient
+from jobs.candidate_selector import select_candidate
+from jobs.firestore_repositories import (
     FirestoreSuggestionRequestRepository,
     FirestoreWalkRepository,
 )
-from location_models import LocationPoint
-from osm_client import OsmClient
+from jobs.location_models import LocationPoint
+from jobs.osm_client import OsmClient
 
-app = Flask(__name__)
-
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-
-PORT = int(os.getenv("PORT", "8080"))
-REQUEST_LOG_BODY_LIMIT = int(os.getenv("REQUEST_LOG_BODY_LIMIT", "2000"))
-
-
-def _truncate_payload(payload):
-    try:
-        text = json.dumps(payload, ensure_ascii=True)
-    except (TypeError, ValueError):
-        text = str(payload)
-    if len(text) > REQUEST_LOG_BODY_LIMIT:
-        return f"{text[:REQUEST_LOG_BODY_LIMIT]}...(truncated)"
-    return text
+jobs_api = Blueprint("jobs_api", __name__, url_prefix="/jobs")
 
 
 def _request_repo():
-    db = firebase_client.get_firestore_client()
+    db = get_firestore_client()
     return FirestoreSuggestionRequestRepository(db)
 
 
 def _walk_repo():
-    db = firebase_client.get_firestore_client()
+    db = get_firestore_client()
     return FirestoreWalkRepository(db)
 
 
@@ -46,60 +27,11 @@ def _osm_client():
     return OsmClient()
 
 
-@app.get("/")
-def index():
-    return jsonify(service="suggestion-job", status="ok")
+def _adk_client():
+    return AdkClient()
 
 
-@app.get("/health")
-def health():
-    return jsonify(status="ok")
-
-
-@app.before_request
-def log_request():
-    request._start_time = time.monotonic()
-    payload = request.get_json(silent=True)
-    if payload is None:
-        app.logger.info("request %s %s", request.method, request.path)
-    else:
-        app.logger.info(
-            "request %s %s payload=%s",
-            request.method,
-            request.path,
-            _truncate_payload(payload),
-        )
-
-
-@app.after_request
-def log_response(response):
-    duration_ms = None
-    if hasattr(request, "_start_time"):
-        duration_ms = int((time.monotonic() - request._start_time) * 1000)
-    payload = None
-    if response.mimetype == "application/json":
-        payload = response.get_json(silent=True)
-    if payload is None:
-        app.logger.info(
-            "response %s %s status=%s duration_ms=%s",
-            request.method,
-            request.path,
-            response.status_code,
-            duration_ms,
-        )
-    else:
-        app.logger.info(
-            "response %s %s status=%s duration_ms=%s payload=%s",
-            request.method,
-            request.path,
-            response.status_code,
-            duration_ms,
-            _truncate_payload(payload),
-        )
-    return response
-
-
-@app.post("/jobs/suggestions")
+@jobs_api.post("/suggestions")
 def run_suggestion_job():
     payload = request.get_json(silent=True) or {}
     request_id = payload.get("requestId")
@@ -163,13 +95,27 @@ def run_suggestion_job():
         request_repo.update_status(request_id, "failed", error="candidate_exhausted")
         return jsonify(status="failed", requestId=request_id, error="candidate_exhausted")
 
+    try:
+        message = _adk_client().generate_message(
+            candidate.snapped.lat,
+            candidate.snapped.lon,
+            user_id=user_id,
+            session_id=walk_id,
+        )
+    except RuntimeError as exc:
+        request_repo.update_status(request_id, "failed", error="adk_failed")
+        return jsonify(
+            status="failed", requestId=request_id, error="adk_failed", detail=str(exc)
+        )
+
     request_repo.update_status(
-        request_id, "failed", error="not_implemented_after_candidate"
+        request_id, "failed", error="not_implemented_after_adk"
     )
     return jsonify(
         status="failed",
         requestId=request_id,
-        error="not_implemented_after_candidate",
+        error="not_implemented_after_adk",
+        message=message,
         candidateLat=candidate.candidate.lat,
         candidateLon=candidate.candidate.lon,
         snappedLat=candidate.snapped.lat,
@@ -189,7 +135,3 @@ def _extract_lat_lon(value):
         if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
             return lat, lon
     return None
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)

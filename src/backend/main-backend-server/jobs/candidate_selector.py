@@ -4,8 +4,8 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from geo import EARTH_RADIUS_M, is_unexplored
-from location_models import LocationPoint
+from .geo import EARTH_RADIUS_M, is_unexplored
+from .location_models import LocationPoint
 
 logger = logging.getLogger(__name__)
 

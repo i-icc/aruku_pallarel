@@ -5,5 +5,5 @@ description = "ADK stub server for machi-danjon."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "flask>=3.0.3",
+    "google-adk",
 ]

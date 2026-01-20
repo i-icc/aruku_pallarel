@@ -49,11 +49,12 @@ services:
 
   suggestion-job:
     build:
-      context: ../src/backend/suggestion-job
+      context: ../src/backend/main-backend-server
     env_file:
       - ../src/backend/main-backend-server/.env.local
+      - ../src/backend/main-backend-server/.env.job.local
     volumes:
-      - ../src/backend/suggestion-job:/app
+      - ../src/backend/main-backend-server:/app
       - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
     ports:
       - "8001:8080"
@@ -74,7 +75,42 @@ services:
       ]
     depends_on:
       - firebase
+      - sanpo-agent
       - osm-stub
+
+  sanpo-agent:
+    build:
+      context: ../src/backend/sanpo-agent
+    env_file:
+      - ../src/backend/sanpo-agent/.env.local
+    environment:
+      - PORT=8080
+      - ADK_AGENTS_DIR=/app
+    volumes:
+      - ../src/backend/sanpo-agent:/app
+      - ${HOME}/.config/gcloud:/app/.config/gcloud:ro
+    ports:
+      - "8020:8080"
+    command:
+      [
+        "uv",
+        "run",
+        "--",
+        "uvicorn",
+        "app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--reload",
+        "--reload-dir",
+        "/app"
+      ]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   osm-stub:
     build:

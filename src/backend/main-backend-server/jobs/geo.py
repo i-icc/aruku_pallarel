@@ -1,6 +1,6 @@
 import math
 
-from location_models import LocationPoint
+from .location_models import LocationPoint
 
 EARTH_RADIUS_M = 6371000.0
 

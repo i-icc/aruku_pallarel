@@ -1,7 +1,7 @@
 from firebase_admin import firestore
 
-from location_models import LocationPoint
-from time_utils import ensure_utc
+from .location_models import LocationPoint
+from .time_utils import ensure_utc
 
 
 class FirestoreSuggestionRequestRepository:
