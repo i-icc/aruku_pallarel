@@ -1,108 +1,6 @@
 from datetime import datetime, timezone
 
-import pytest
-from firebase_admin import firestore
-
 import firebase_client
-from app import app as flask_app
-
-
-class FakeDocSnapshot:
-    def __init__(self, data, doc_id, reference):
-        self._data = data
-        self.id = doc_id
-        self.reference = reference
-
-    @property
-    def exists(self):
-        return self._data is not None
-
-    def to_dict(self):
-        return self._data
-
-
-class FakeDocRef:
-    def __init__(self, store, path, now):
-        self._store = store
-        self._path = tuple(path)
-        self._now = now
-
-    def set(self, data, merge=False):
-        resolved = {}
-        for key, value in data.items():
-            if value is firestore.SERVER_TIMESTAMP:
-                resolved[key] = self._now
-            else:
-                resolved[key] = value
-
-        if merge and self._path in self._store:
-            merged = dict(self._store[self._path])
-            merged.update(resolved)
-            self._store[self._path] = merged
-        else:
-            self._store[self._path] = resolved
-
-    def get(self):
-        data = self._store.get(self._path)
-        return FakeDocSnapshot(data, self._path[-1], self)
-
-    def delete(self):
-        self._store.pop(self._path, None)
-
-    def collection(self, name):
-        return FakeCollection(self._store, list(self._path) + [name], self._now)
-
-    def collections(self):
-        prefix = self._path
-        collection_names = set()
-        for key in self._store.keys():
-            if len(key) >= len(prefix) + 2 and key[: len(prefix)] == prefix:
-                collection_names.add(key[len(prefix)])
-        return [
-            FakeCollection(self._store, list(prefix) + [name], self._now)
-            for name in sorted(collection_names)
-        ]
-
-
-class FakeCollection:
-    def __init__(self, store, path, now):
-        self._store = store
-        self._path = tuple(path)
-        self._now = now
-
-    def document(self, doc_id):
-        return FakeDocRef(self._store, list(self._path) + [doc_id], self._now)
-
-    def stream(self):
-        prefix = self._path
-        for key, value in list(self._store.items()):
-            if len(key) == len(prefix) + 1 and key[: len(prefix)] == prefix:
-                doc_id = key[-1]
-                ref = FakeDocRef(self._store, list(prefix) + [doc_id], self._now)
-                yield FakeDocSnapshot(value, doc_id, ref)
-
-
-class FakeFirestoreClient:
-    def __init__(self, now):
-        self._store = {}
-        self._now = now
-
-    def collection(self, name):
-        return FakeCollection(self._store, [name], self._now)
-
-
-@pytest.fixture
-
-def client():
-    flask_app.config.update(TESTING=True)
-    with flask_app.test_client() as test_client:
-        yield test_client
-
-
-@pytest.fixture
-
-def fake_firestore():
-    return FakeFirestoreClient(datetime(2026, 1, 12, tzinfo=timezone.utc))
 
 
 def auth_header():
@@ -189,21 +87,25 @@ def test_users_update(client, fake_firestore, monkeypatch):
 
     response = client.patch(
         "/v1/users/me",
-        json={"nickname": "new-name"},
+        json={"nickname": "new-name", "fcmToken": "fcm-token-1"},
         headers=auth_header(),
     )
 
     assert response.status_code == 200
     assert response.json["userId"] == "user-123"
     assert response.json["nickname"] == "new-name"
+    assert response.json["fcmToken"] == "fcm-token-1"
     assert response.json["updatedAt"].endswith("Z")
 
     get_response = client.get("/v1/users/me", headers=auth_header())
     assert get_response.status_code == 200
     assert get_response.json["nickname"] == "new-name"
+    assert (
+        fake_firestore._store[("users", "user-123")]["fcmToken"] == "fcm-token-1"
+    )
 
 
-def test_users_update_requires_nickname(client, fake_firestore, monkeypatch):
+def test_users_update_requires_payload(client, fake_firestore, monkeypatch):
     monkeypatch.setattr(
         firebase_client,
         "verify_id_token",
@@ -219,6 +121,38 @@ def test_users_update_requires_nickname(client, fake_firestore, monkeypatch):
 
     assert response.status_code == 400
     assert response.json["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_users_update_fcm_token_only(client, fake_firestore, monkeypatch):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123"},
+    )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    fake_firestore._store[("users", "user-123")] = {
+        "nickname": "old-name",
+        "createdAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+    }
+
+    response = client.patch(
+        "/v1/users/me",
+        json={"fcmToken": "fcm-token-2"},
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["userId"] == "user-123"
+    assert response.json["fcmToken"] == "fcm-token-2"
+    assert response.json["updatedAt"].endswith("Z")
+    assert (
+        fake_firestore._store[("users", "user-123")]["fcmToken"] == "fcm-token-2"
+    )
 
 
 def test_users_delete_removes_nested_docs(client, fake_firestore, monkeypatch):

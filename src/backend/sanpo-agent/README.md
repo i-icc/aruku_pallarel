@@ -1,8 +1,13 @@
-# Sanpo Agent (ADK Stub)
+# Sanpo Agent (ADK)
 
-## Local Run (uv)
+## Local Run (Docker Compose)
 ```bash
-cd src/backend/sanpo-agent
-uv sync
-uv run -- python app.py
+docker compose -f infrastructure/docker-compose.yml up -d sanpo-agent
 ```
+
+## Agent Config
+- `sanpo_agent/agent.py` is the entry-point agent definition.
+
+## Environment
+- `src/backend/sanpo-agent/.env.local` に `GOOGLE_API_KEY` を設定する
+- ローカルは Vertex AI を使わない（`GOOGLE_GENAI_USE_VERTEXAI=false`）

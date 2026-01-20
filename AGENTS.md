@@ -21,7 +21,18 @@
 - 仕様変更は `spec/` を先に更新し、`README.md` は概要とリンクのみに反映する
 - `spec/` 内に新規ドキュメントを追加したら `spec/README.md` に追記する
 - ローカルの Backend/Emulator/Tasks スタブは `infrastructure/docker-compose.yml` を使用する
+- ローカルの OSM/ADK も `infrastructure/docker-compose.yml` を使用する
+- ADK は `google-adk` の FastAPI を使用し、`sanpo-agent` サービスで動かす
+- ADK のエントリーポイントは `src/backend/sanpo-agent/sanpo_agent/agent.py`
+- ローカルの ADK は API キーで動かす（`GOOGLE_GENAI_USE_VERTEXAI=false` と `GOOGLE_API_KEY` を使用）
+- Backend と ADK はそれぞれ専用の `.env.local` を使う
+- Backend/Job は同一イメージを使い、Job エンドポイントは `ENABLE_JOB_ENDPOINTS=true` のときだけ有効化する
+- Backend/Suggestion Job は Docker Compose でホットリロードを有効化する（`infrastructure/docker-compose.yml` の bind mount + Flask debug）
 - Backend/ADK は `uv` で依存管理し、起動・開発は Docker Compose を優先する
 - Backend/ADK の `pyproject.toml`/`README.md` は各ディレクトリで独立管理する
+- Backend エミュレーター利用時は ADC を用意し、`GOOGLE_APPLICATION_CREDENTIALS` と gcloud 設定のマウントを行う
 - Flutter/Dart のコマンドは必ず `fvm` 経由で実行する（例: `fvm flutter`, `fvm dart`）
+- 位置情報取得は `locus` (v2) を使用する
+- 開発用の位置偽装は設定トグルで切り替え、散歩中マップの 2 秒長押しで現在地を設定する
+- 散歩再開は Firestore の active walk を復元する前提で対応する
 - バグ修正時は `tasks/` にチケットを起票してから対応する

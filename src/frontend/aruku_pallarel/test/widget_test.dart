@@ -7,8 +7,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import 'package:aruku_pallarel/main.dart';
+import 'package:aruku_pallarel/screens/authentication/login_screen.dart';
 
 void main() {
   testWidgets('Login screen renders fields', (WidgetTester tester) async {
@@ -28,6 +29,6 @@ class TestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(home: child);
+    return ProviderScope(child: MaterialApp(home: child));
   }
 }

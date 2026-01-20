@@ -24,4 +24,7 @@ abstract class Env {
 
   @EnviedField(varName: 'USE_EMULATORS')
   static const bool useEmulators = _Env.useEmulators;
+
+  @EnviedField(varName: 'JAWG_ACCESS_TOKEN')
+  static const String jawgAccessToken = _Env.jawgAccessToken;
 }

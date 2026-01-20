@@ -1,24 +1,12 @@
-import logging
 import os
 
-from flask import Flask, jsonify
+from google.adk.cli.fast_api import get_fast_api_app
 
-app = Flask(__name__)
+AGENTS_DIR = os.getenv("ADK_AGENTS_DIR", os.path.dirname(__file__))
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
-
-PORT = int(os.getenv("PORT", "8080"))
-
-
-@app.get("/")
-def index():
-    return jsonify(service="adk", status="ok")
+app = get_fast_api_app(agents_dir=AGENTS_DIR, web=False)
 
 
 @app.get("/health")
-def health():
-    return jsonify(status="ok")
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)
+async def health():
+    return {"status": "ok"}

@@ -52,9 +52,12 @@
 #### Request
 ```json
 {
-  "nickname": "新しいニックネーム"
+  "nickname": "新しいニックネーム",
+  "fcmToken": "fcm-token"
 }
 ```
+
+> `nickname` / `fcmToken` のいずれかは必須。
 
 #### Response
 ```json
@@ -128,14 +131,19 @@
 ```json
 {
   "result": "ok",
-  "reason": null
+  "requestId": "01JABCDEFG..."
 }
 ```
 
-`result: ng` の場合は、移動量不足やクールダウン中などの理由を `reason` に入れる。
+`result: ng` の場合は理由は返さず、ログのみ残す。
+
+#### 判定条件
+- 前回の `result: ok` リクエストから 5 分未満なら `ng`（設定値 / 初期値: 5分）
+- 前回の `result: ok` リクエスト（初回は散歩開始）からの移動距離が 250m 未満なら `ng`（設定値 / 初期値: 250m）
+- `result: ok` の場合は `requests/{requestId}` を作成し、Cloud Tasks に `requestId` を渡す
 
 ## レート制御（推奨）
-- 提案リクエストは 5 分に 1 回まで
+- 提案リクエストは 5 分に 1 回まで（基準は直近の `result: ok`）
 - 連続リクエストはサーバー側で `ng` 返却
 
 ---

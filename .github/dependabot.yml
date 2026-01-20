@@ -1,0 +1,76 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/src/backend/main-backend-server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/src/backend/sanpo-agent"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "pip"
+    directory: "/src/tasks_stub"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # - package-ecosystem: "npm"
+  #   directory: "/src/frontend/example"
+  #   schedule:
+  #     interval: "weekly"
+  #   open-pull-requests-limit: 5
+  #   groups:
+  #     npm-dependencies:
+  #       patterns:
+  #         - "*"
+  #       update-types:
+  #         - "minor"
+  #         - "patch"
+
+  - package-ecosystem: "pub"
+    directory: "/src/frontend/aruku_pallarel"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      pub-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

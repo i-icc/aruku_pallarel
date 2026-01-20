@@ -27,3 +27,5 @@ build/
 .vscode/
 .flutter-plugins-dependencies
 .flutter-plugins
+
+uv.lock

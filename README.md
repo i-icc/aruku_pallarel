@@ -41,7 +41,8 @@ fvm flutter test
 ```bash
 docker compose -f infrastructure/docker-compose.yml up -d backend
 ```
-詳細は `src/backend/main-backend-server/README.md` を参照してください。
+ローカルではコード変更で自動リロードされます。
+ADC の設定が必要です。詳細は `src/backend/main-backend-server/README.md` を参照してください。
 
 ## リポジトリ構成
 - `src/frontend/aruku_pallarel` Flutterアプリ
@@ -49,13 +50,5 @@ docker compose -f infrastructure/docker-compose.yml up -d backend
 - `tasks/` タスク管理
 
 ## 全体像（概要）
-```mermaid
-flowchart LR
-  App[Flutter App] -->|Auth/HTTP| API[Cloud Run API]
-  API --> FS[Firestore]
-  API --> FCM[Firebase Cloud Messaging]
-  API --> ADK[ADK / LLM]
-  API --> MAP[OSRM / OSM]
-  FCM --> App
-  App <-->|Firestore 読み書き| FS
-```
+
+![architecture](./spec/images/machi-dan.drawio.png)
