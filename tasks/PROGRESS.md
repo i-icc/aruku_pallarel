@@ -78,6 +78,7 @@
 - 073: GAR Push CI 用 Workload Identity Provider / SA 作成
 - 035: main マージ後の GAR Push CI
 - 074: FCM トークン同期
+- 077: GAR Push CI のジョブ分割と latest タグ運用
 
 ## 未着手(優先順位順)
 - 037: チャット機能のタスク分解
@@ -87,4 +88,4 @@
 
 ## 最終更新
 最終更新日: 2026-01-20
-前回完了タスク: 074
+前回完了タスク: 077
