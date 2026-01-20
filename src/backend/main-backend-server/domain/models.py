@@ -29,7 +29,8 @@ class User:
 @dataclass(frozen=True)
 class UserUpdateResult:
     user_id: str
-    nickname: str
+    nickname: str | None
+    fcm_token: str | None
     updated_at: datetime
 
 

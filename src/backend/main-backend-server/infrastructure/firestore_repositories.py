@@ -30,15 +30,14 @@ class FirestoreUserRepository:
             return None
         return snapshot.to_dict() or {}
 
-    def update_user(self, user_id, nickname):
+    def update_user(self, user_id, nickname=None, fcm_token=None):
         doc_ref = self._db.collection("users").document(user_id)
-        doc_ref.set(
-            {
-                "nickname": nickname,
-                "updatedAt": firestore.SERVER_TIMESTAMP,
-            },
-            merge=True,
-        )
+        data = {"updatedAt": firestore.SERVER_TIMESTAMP}
+        if nickname is not None:
+            data["nickname"] = nickname
+        if fcm_token is not None:
+            data["fcmToken"] = fcm_token
+        doc_ref.set(data, merge=True)
 
     def delete_user(self, user_id):
         doc_ref = self._db.collection("users").document(user_id)

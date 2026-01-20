@@ -41,6 +41,24 @@ class UserApi {
       throw backendExceptionFromDio(error);
     }
   }
+
+  Future<void> updateUser({String? nickname, String? fcmToken}) async {
+    final payload = <String, dynamic>{};
+    if (nickname != null) {
+      payload['nickname'] = nickname;
+    }
+    if (fcmToken != null) {
+      payload['fcmToken'] = fcmToken;
+    }
+    if (payload.isEmpty) {
+      return;
+    }
+    try {
+      await _dio.patch('/v1/users/me', data: payload);
+    } on DioException catch (error) {
+      throw backendExceptionFromDio(error);
+    }
+  }
 }
 
 @Riverpod(keepAlive: true)

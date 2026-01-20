@@ -1,3 +1,8 @@
 project_id         = "your-project-id"
 region             = "us-central1"
 firestore_location = "us-central1"
+github_repository  = "your-org/your-repo"
+github_branch      = "main"
+github_wif_pool_id = "github-actions"
+github_wif_provider_id = "github-actions"
+github_actions_sa_id = "github-actions-ci"

@@ -87,21 +87,25 @@ def test_users_update(client, fake_firestore, monkeypatch):
 
     response = client.patch(
         "/v1/users/me",
-        json={"nickname": "new-name"},
+        json={"nickname": "new-name", "fcmToken": "fcm-token-1"},
         headers=auth_header(),
     )
 
     assert response.status_code == 200
     assert response.json["userId"] == "user-123"
     assert response.json["nickname"] == "new-name"
+    assert response.json["fcmToken"] == "fcm-token-1"
     assert response.json["updatedAt"].endswith("Z")
 
     get_response = client.get("/v1/users/me", headers=auth_header())
     assert get_response.status_code == 200
     assert get_response.json["nickname"] == "new-name"
+    assert (
+        fake_firestore._store[("users", "user-123")]["fcmToken"] == "fcm-token-1"
+    )
 
 
-def test_users_update_requires_nickname(client, fake_firestore, monkeypatch):
+def test_users_update_requires_payload(client, fake_firestore, monkeypatch):
     monkeypatch.setattr(
         firebase_client,
         "verify_id_token",
@@ -117,6 +121,38 @@ def test_users_update_requires_nickname(client, fake_firestore, monkeypatch):
 
     assert response.status_code == 400
     assert response.json["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_users_update_fcm_token_only(client, fake_firestore, monkeypatch):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123"},
+    )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    fake_firestore._store[("users", "user-123")] = {
+        "nickname": "old-name",
+        "createdAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+    }
+
+    response = client.patch(
+        "/v1/users/me",
+        json={"fcmToken": "fcm-token-2"},
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["userId"] == "user-123"
+    assert response.json["fcmToken"] == "fcm-token-2"
+    assert response.json["updatedAt"].endswith("Z")
+    assert (
+        fake_firestore._store[("users", "user-123")]["fcmToken"] == "fcm-token-2"
+    )
 
 
 def test_users_delete_removes_nested_docs(client, fake_firestore, monkeypatch):

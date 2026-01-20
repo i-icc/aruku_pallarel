@@ -75,15 +75,16 @@
 - 071: Backend のホットリロード対応（Docker Compose）
 - 072: Backend のリクエスト/レスポンスログ追加
 - 067: 提案保存と FCM 通知
+- 073: GAR Push CI 用 Workload Identity Provider / SA 作成
+- 035: main マージ後の GAR Push CI
+- 074: FCM トークン同期
 
 ## 未着手(優先順位順)
 - 037: チャット機能のタスク分解
-- 073: GAR Push CI 用 Workload Identity Provider / SA 作成
-- 035: main マージ後の GAR Push CI
 
 ## 廃止（置き換え済み）
 - 032: 位置情報のバッチ保存（Firestore）(旧仕様: 20秒ポーリング) → 039 に置き換え
 
 ## 最終更新
 最終更新日: 2026-01-20
-前回完了タスク: 066
+前回完了タスク: 074

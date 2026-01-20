@@ -52,9 +52,12 @@
 #### Request
 ```json
 {
-  "nickname": "新しいニックネーム"
+  "nickname": "新しいニックネーム",
+  "fcmToken": "fcm-token"
 }
 ```
+
+> `nickname` / `fcmToken` のいずれかは必須。
 
 #### Response
 ```json
