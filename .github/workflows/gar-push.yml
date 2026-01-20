@@ -57,9 +57,9 @@ jobs:
           for name in GCP_PROJECT_ID GCP_REGION GAR_REPOSITORY GCP_WIF_PROVIDER GCP_WIF_SERVICE_ACCOUNT; do
             if [ -z "${!name}" ]; then
               missing+=("$name")
-          fi
-        done
-        if [ "${#missing[@]}" -ne 0 ]; then
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
             echo "Missing required GitHub Actions vars/secrets: ${missing[*]}"
             exit 1
           fi
