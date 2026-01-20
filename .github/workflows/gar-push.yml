@@ -11,11 +11,11 @@ permissions:
   id-token: write
 
 env:
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-  GCP_REGION: ${{ vars.GCP_REGION }}
-  GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
-  GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
-  GCP_WIF_SERVICE_ACCOUNT: ${{ vars.GCP_WIF_SERVICE_ACCOUNT }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || secrets.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION || secrets.GCP_REGION }}
+  GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY || secrets.GAR_REPOSITORY }}
+  GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER || secrets.GCP_WIF_PROVIDER }}
+  GCP_WIF_SERVICE_ACCOUNT: ${{ vars.GCP_WIF_SERVICE_ACCOUNT || secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
 jobs:
   build:
@@ -26,6 +26,19 @@ jobs:
 
       - name: Set Short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Validate GCP settings
+        run: |
+          missing=()
+          for name in GCP_PROJECT_ID GCP_REGION GAR_REPOSITORY GCP_WIF_PROVIDER GCP_WIF_SERVICE_ACCOUNT; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "Missing required GitHub Actions vars/secrets: ${missing[*]}"
+            exit 1
+          fi
 
       - name: Auth with Workload Identity
         id: auth
