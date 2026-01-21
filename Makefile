@@ -24,3 +24,6 @@ flutter-generate:
 
 flutter-run:
 	cd src/frontend/aruku_pallarel && fvm flutter run
+
+flutter-clean:
+	cd src/frontend/aruku_pallarel && fvm flutter clean
