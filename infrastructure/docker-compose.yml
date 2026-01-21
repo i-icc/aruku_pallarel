@@ -76,7 +76,7 @@ services:
     depends_on:
       - firebase
       - sanpo-agent
-      - osm-stub
+      - osm
 
   sanpo-agent:
     build:
@@ -112,17 +112,20 @@ services:
       timeout: 3s
       retries: 3
 
-  osm-stub:
-    build:
-      context: ../src/backend/osm-stub
+  osm:
+    image: ${OSRM_IMAGE:-us-central1-docker.pkg.dev/aruku-parallel/aruku-parallel/osrm:tokyo-20260121-1}
     environment:
       - PORT=8080
-    volumes:
-      - ../src/backend/osm-stub:/app
     ports:
       - "8010:8080"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://localhost:8080/nearest/v1/driving/139.767125,35.681236?number=1"
+        ]
       interval: 30s
       timeout: 3s
       retries: 3

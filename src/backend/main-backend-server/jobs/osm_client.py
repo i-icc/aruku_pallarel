@@ -17,14 +17,10 @@ class OsmClient:
     def nearest_road(self, lat: float, lon: float) -> LocationPoint:
         if not self._base_url:
             raise RuntimeError("OSM_BASE_URL is not set")
-        url = f"{self._base_url.rstrip('/')}/nearest"
-        payload = json.dumps({"lat": lat, "lon": lon}).encode("utf-8")
-        request_obj = urllib.request.Request(
-            url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
+        url = (
+            f"{self._base_url.rstrip('/')}/nearest/v1/driving/{lon},{lat}?number=1"
         )
+        request_obj = urllib.request.Request(url, method="GET")
 
         try:
             with urllib.request.urlopen(
@@ -39,12 +35,24 @@ class OsmClient:
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise RuntimeError("OSM response is invalid JSON") from exc
 
-        lat_value = data.get("lat")
-        lon_value = data.get("lon")
-        if not isinstance(lat_value, (int, float)) or not isinstance(
-            lon_value, (int, float)
+        if data.get("code") != "Ok":
+            raise RuntimeError("OSM response error")
+
+        waypoints = data.get("waypoints")
+        if not isinstance(waypoints, list) or not waypoints:
+            raise RuntimeError("OSM response missing waypoints")
+
+        waypoint = waypoints[0] if isinstance(waypoints[0], dict) else None
+        location = waypoint.get("location") if waypoint else None
+        if (
+            not isinstance(location, list)
+            or len(location) < 2
+            or not isinstance(location[0], (int, float))
+            or not isinstance(location[1], (int, float))
         ):
             raise RuntimeError("OSM response missing lat/lon")
+
+        lon_value, lat_value = location[0], location[1]
 
         return LocationPoint(
             lat=lat_value, lon=lon_value, timestamp=datetime.now(timezone.utc)
