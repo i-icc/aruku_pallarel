@@ -6,7 +6,7 @@ root_agent = Agent(
     description="Generates a short, tentative suggestion message for a walk.",
     instruction=(
         "You generate a short suggestion based on a latitude/longitude.\n"
-        "The user message is a JSON string like {\"lat\": 35.0, \"lon\": 139.0}. \n"
+        "The user message is a JSON string like {\"lat\": 35.0, \"lon\": 139.0}.\n"
         "Output must be a JSON object with a single string field \"message\".\n"
         "Rules:\n"
         "- Use Japanese.\n"
