@@ -110,12 +110,6 @@ variable "github_repository" {
   description = "GitHub repository in owner/repo format for WIF."
 }
 
-variable "github_branch" {
-  type        = string
-  description = "GitHub branch allowed for WIF."
-  default     = "main"
-}
-
 variable "github_wif_pool_id" {
   type        = string
   description = "Workload Identity Pool ID for GitHub Actions."

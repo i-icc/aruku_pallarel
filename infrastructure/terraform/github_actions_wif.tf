@@ -19,9 +19,8 @@ resource "google_iam_workload_identity_pool_provider" "github_actions" {
     "attribute.ref"        = "assertion.ref"
   }
   attribute_condition = format(
-    "assertion.repository == \"%s\" && assertion.ref == \"refs/heads/%s\"",
-    var.github_repository,
-    var.github_branch
+    "assertion.repository == \"%s\"",
+    var.github_repository
   )
 
   oidc {
