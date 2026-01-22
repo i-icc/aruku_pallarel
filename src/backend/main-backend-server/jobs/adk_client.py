@@ -3,13 +3,25 @@ import os
 import urllib.error
 import urllib.request
 
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+
 
 class AdkClient:
-    def __init__(self, base_url=None, app_name=None, timeout_seconds=None):
+    def __init__(
+        self,
+        base_url=None,
+        app_name=None,
+        timeout_seconds=None,
+        id_token_audience=None,
+    ):
         self._base_url = base_url or os.getenv("ADK_BASE_URL")
         self._app_name = app_name or os.getenv("ADK_APP_NAME")
         self._timeout_seconds = int(
             timeout_seconds or os.getenv("ADK_TIMEOUT_SECONDS", "10")
+        )
+        self._id_token_audience = id_token_audience or os.getenv(
+            "ADK_ID_TOKEN_AUDIENCE"
         )
 
     def generate_message(
@@ -66,10 +78,12 @@ class AdkClient:
 
     def _post_json(self, path: str, payload: bytes) -> tuple[int, bytes]:
         url = f"{self._base_url.rstrip('/')}{path}"
+        headers = {"Content-Type": "application/json"}
+        headers.update(self._auth_header())
         request_obj = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         try:
@@ -81,6 +95,17 @@ class AdkClient:
             return exc.code, exc.read()
         except urllib.error.URLError as exc:
             raise RuntimeError(f"ADK request failed: {exc}") from exc
+
+    def _auth_header(self) -> dict[str, str]:
+        if not self._id_token_audience:
+            return {}
+        try:
+            token = id_token.fetch_id_token(
+                google_requests.Request(), self._id_token_audience
+            )
+        except Exception as exc:
+            raise RuntimeError("ADK ID token fetch failed") from exc
+        return {"Authorization": f"Bearer {token}"}
 
 
 def _coerce_id(value, fallback: str) -> str:

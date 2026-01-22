@@ -92,3 +92,10 @@ resource "google_cloud_run_v2_job_iam_member" "job_invoker_tasks" {
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.tasks_invoker.email}"
 }
+
+resource "google_cloud_run_v2_service_iam_member" "suggest_job_invoker_tasks" {
+  name     = google_cloud_run_v2_service.suggest_job.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.tasks_invoker.email}"
+}

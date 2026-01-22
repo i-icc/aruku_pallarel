@@ -78,6 +78,9 @@
 - 073: GAR Push CI 用 Workload Identity Provider / SA 作成
 - 035: main マージ後の GAR Push CI
 - 074: FCM トークン同期
+- 077: GAR Push CI のジョブ分割と latest タグ運用
+- 079: Terraform の OSRM カスタムイメージ（東京データ）反映
+- 078: Terraform の Cloud Run/Firebase 設定見直し
 
 ## 未着手(優先順位順)
 - 037: チャット機能のタスク分解
@@ -86,5 +89,5 @@
 - 032: 位置情報のバッチ保存（Firestore）(旧仕様: 20秒ポーリング) → 039 に置き換え
 
 ## 最終更新
-最終更新日: 2026-01-20
-前回完了タスク: 074
+最終更新日: 2026-01-21
+前回完了タスク: 078

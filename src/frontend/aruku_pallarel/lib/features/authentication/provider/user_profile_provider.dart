@@ -1,6 +1,4 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../share/services/backend_exception.dart';
@@ -11,8 +9,6 @@ part 'user_profile_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class UserProfileNotifier extends _$UserProfileNotifier {
-  String? _syncedFcmToken;
-  bool _syncingFcmToken = false;
 
   @override
   Future<UserProfile?> build() async {
@@ -44,43 +40,13 @@ class UserProfileNotifier extends _$UserProfileNotifier {
   }) async {
     final api = ref.read(userApiProvider);
     try {
-      final profile = await api.fetchMe();
-      await _syncFcmToken();
-      return profile;
+      return await api.fetchMe();
     } on BackendException catch (error) {
       if (error.code == 'USER_NOT_FOUND') {
         final nickname = _normalizeNickname(fallbackNickname);
-        final profile = await api.createUser(nickname);
-        await _syncFcmToken();
-        return profile;
+        return await api.createUser(nickname);
       }
       rethrow;
-    }
-  }
-
-  Future<void> _syncFcmToken() async {
-    if (_syncingFcmToken) {
-      return;
-    }
-    _syncingFcmToken = true;
-    try {
-      final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission();
-      final token = await messaging.getToken();
-      if (token == null || token.isEmpty) {
-        debugPrint('fcm_token_skip: token unavailable');
-        return;
-      }
-      if (token == _syncedFcmToken) {
-        return;
-      }
-      await ref.read(userApiProvider).updateUser(fcmToken: token);
-      _syncedFcmToken = token;
-    } catch (error, stackTrace) {
-      debugPrint('fcm_token_sync_failed: $error');
-      debugPrint('$stackTrace');
-    } finally {
-      _syncingFcmToken = false;
     }
   }
 
