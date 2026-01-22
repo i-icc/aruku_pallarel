@@ -69,6 +69,12 @@ variable "job_name" {
   default     = "suggest-job"
 }
 
+variable "suggest_job_service_name" {
+  type        = string
+  description = "Cloud Run service name for suggestion job."
+  default     = "suggestion-job"
+}
+
 variable "backend_image" {
   type        = string
   description = "Container image for backend."
@@ -90,7 +96,13 @@ variable "osm_image" {
 variable "job_image" {
   type        = string
   description = "Container image for job."
-  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+  default     = ""
+}
+
+variable "adk_app_name" {
+  type        = string
+  description = "ADK app name for requests."
+  default     = "sanpo_agent"
 }
 
 variable "github_repository" {

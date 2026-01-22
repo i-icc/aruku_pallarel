@@ -11,6 +11,7 @@
 | [api.md](./api.md) | API 設計（Flask / Cloud Run） |
 | [ai.md](./ai.md) | エージェント / LLM 設計 |
 | [flutter.md](./flutter.md) | Flutter 技術仕様 |
+| [osrm.md](./osrm.md) | OSRM データ/イメージ運用 |
 
 ## 更新ルール
 - 仕様変更は `spec/` を最初に更新する
