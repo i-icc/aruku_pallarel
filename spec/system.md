@@ -1,7 +1,7 @@
 # システム構成
 
 ## 構成図（概要）
-`spec/images/machi-dan.drawio.png` を参照。Cloud Run（Backend/ADK/OSM/Job）は共通で Direct VPC Egress を使用する。
+`spec/images/machi-dan.drawio.png` を参照。Cloud Run（Backend/ADK/OSM/Job Service）は共通で Direct VPC Egress を使用する。
 
 ![architecture](./images/machi-dan.drawio.png)
 
@@ -19,7 +19,7 @@ flowchart TB
     Backend["Backend (public)"]
     ADK["ADK (IAM only)"]
     OSM["OSM (IAM only)"]
-    Job["Job (batch)"]
+    Job["Job (service)"]
   end
 
   App -->|ID Token| Backend
@@ -54,12 +54,12 @@ flowchart TB
 - Firestore: walk/位置/提案/チャット/requests の永続化
 - FCM: 提案・更新通知の配信
 - Cloud Run Backend (Python / Flask): walk開始/終了、ユーザー登録/管理、軽量な提案リクエスト受付、データ整形、Cloud Tasks へのジョブ投入
-- Cloud Tasks: 長時間/重い処理のキューイング。Cloud Run Job を HTTP ターゲットで起動する
-- Cloud Run Job: 非同期バッチ（提案生成・通知送信）。ADK/OSM/Firestore/FCM への連携をまとめて実行
+- Cloud Tasks: 長時間/重い処理のキューイング。suggestion-job の Cloud Run サービスを HTTP ターゲットで起動する
+- Cloud Run Job Service (suggestion-job): 非同期バッチ相当の API を提供し、提案生成・通知送信を実行する
 - Cloud Run ADK: LLM 用の推論サービス。Vertex AI を利用し、バックエンド/ジョブから呼び出される
 - Cloud Run OSM (OSRM): 候補地点に対して最寄り道路座標を返すセルフホストサービス
-- Artifact Registry: すべての Cloud Run / Job イメージの保管
-- VPC Direct Egress: すべての Cloud Run サービス/Job が使用し、Vertex AI 等への到達性とアウトバウンド制御を確保する
+- Artifact Registry: すべての Cloud Run サービス（Backend/ADK/OSM/Job Service）イメージの保管
+- VPC Direct Egress: すべての Cloud Run サービスが使用し、Vertex AI 等への到達性とアウトバウンド制御を確保する
 
 ## 主要フロー
 
@@ -78,7 +78,7 @@ flowchart TB
 1. App は Firestore から `walks` / `suggests` / `chat` を読み取る
 2. 既存データは読み取り専用で表示する
 
-### 提案生成（非同期・重い処理を Cloud Tasks/Run Job に委譲）
+### 提案生成（非同期・重い処理を Cloud Tasks/Job Service に委譲）
 ```mermaid
 sequenceDiagram
   participant App
@@ -135,13 +135,13 @@ sequenceDiagram
 - API は Firebase ID Token を検証する
 - Firestore ルールでユーザー自身のデータにのみアクセス可能とする
 - 位置情報は散歩中のみ取得し、ユーザーの削除要求で全消去できるようにする
-- ADK/OSM は `allow-unauthenticated` を無効化し、Backend/Job のサービスアカウントに `roles/run.invoker` を付与する
+- ADK/OSM は `allow-unauthenticated` を無効化し、Backend/Job Service のサービスアカウントに `roles/run.invoker` を付与する
 
 ## インフラ/開発運用
-- IaC は Terraform を使用し、Cloud Run（Backend/ADK/OSM/Job）、Cloud Tasks、Firestore、Auth、FCM などを管理する
+- IaC は Terraform を使用し、Cloud Run（Backend/ADK/OSM/Job Service）、Cloud Tasks、Firestore、Auth、FCM などを管理する
 - ローカル開発では Firestore Emulator / Auth Emulator を優先利用し、Task や外部呼び出しはスタブ/モックで代替する。可能な範囲で emulator を使い、実サービス呼び出しを最小化する
-- Cloud Run サービス/Job は共通で VPC Direct Egress（private ranges only）を有効化し、Vertex AI などの外部エンドポイントへの到達を統制する
-- Backend/Job は同一イメージを利用し、Job エンドポイントは環境変数で有効化する（ローカルは `ENABLE_JOB_ENDPOINTS=true` ）
+- Cloud Run サービスは共通で VPC Direct Egress（private ranges only）を有効化し、Vertex AI などの外部エンドポイントへの到達を統制する
+- Backend/Job Service は同一イメージを利用し、Job エンドポイントは環境変数で有効化する（ローカルは `ENABLE_JOB_ENDPOINTS=true` ）
 - OSM/OSRM は東京データ入りのカスタムイメージで運用する（詳細は `spec/osrm.md`）
 
 ### Terraform 運用手順（手作業）

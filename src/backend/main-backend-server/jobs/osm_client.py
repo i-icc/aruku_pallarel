@@ -4,14 +4,20 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+
 from .location_models import LocationPoint
 
 
 class OsmClient:
-    def __init__(self, base_url=None, timeout_seconds=None):
+    def __init__(self, base_url=None, timeout_seconds=None, id_token_audience=None):
         self._base_url = base_url or os.getenv("OSM_BASE_URL")
         self._timeout_seconds = int(
             timeout_seconds or os.getenv("OSM_TIMEOUT_SECONDS", "10")
+        )
+        self._id_token_audience = id_token_audience or os.getenv(
+            "OSM_ID_TOKEN_AUDIENCE"
         )
 
     def nearest_road(self, lat: float, lon: float) -> LocationPoint:
@@ -20,7 +26,8 @@ class OsmClient:
         url = (
             f"{self._base_url.rstrip('/')}/nearest/v1/driving/{lon},{lat}?number=1"
         )
-        request_obj = urllib.request.Request(url, method="GET")
+        headers = self._auth_header()
+        request_obj = urllib.request.Request(url, headers=headers, method="GET")
 
         try:
             with urllib.request.urlopen(
@@ -57,3 +64,14 @@ class OsmClient:
         return LocationPoint(
             lat=lat_value, lon=lon_value, timestamp=datetime.now(timezone.utc)
         )
+
+    def _auth_header(self) -> dict[str, str]:
+        if not self._id_token_audience:
+            return {}
+        try:
+            token = id_token.fetch_id_token(
+                google_requests.Request(), self._id_token_audience
+            )
+        except Exception as exc:
+            raise RuntimeError("OSM ID token fetch failed") from exc
+        return {"Authorization": f"Bearer {token}"}
