@@ -26,21 +26,32 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      sanpo_agent: ${{ steps.filter.outputs.sanpo_agent }}
+      backend: ${{ steps.filter.outputs.backend || steps.manual.outputs.backend }}
+      sanpo_agent: ${{ steps.filter.outputs.sanpo_agent || steps.manual.outputs.sanpo_agent }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Filter paths
         id: filter
         uses: dorny/paths-filter@v3
         with:
+          base: ${{ github.event_name == 'push' && github.event.before || github.sha }}
+          ref: ${{ github.sha }}
           filters: |
             backend:
               - "src/backend/main-backend-server/**"
             sanpo_agent:
               - "src/backend/sanpo-agent/**"
+
+      - name: Enable all on workflow_dispatch
+        id: manual
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "backend=true" >> "$GITHUB_OUTPUT"
+          echo "sanpo_agent=true" >> "$GITHUB_OUTPUT"
 
   backend:
     name: Build & Push backend
