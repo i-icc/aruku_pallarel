@@ -87,13 +87,6 @@ class OsmClient:
             lat=lat_value, lon=lon_value, timestamp=datetime.now(timezone.utc)
         )
 
-
-def _decode_body(body: bytes) -> str:
-    try:
-        return body.decode("utf-8")
-    except UnicodeDecodeError:
-        return "<binary>"
-
     def _auth_header(self) -> dict[str, str]:
         if not self._id_token_audience:
             return {}
@@ -104,3 +97,10 @@ def _decode_body(body: bytes) -> str:
         except Exception as exc:
             raise RuntimeError("OSM ID token fetch failed") from exc
         return {"Authorization": f"Bearer {token}"}
+
+
+def _decode_body(body: bytes) -> str:
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError:
+        return "<binary>"
