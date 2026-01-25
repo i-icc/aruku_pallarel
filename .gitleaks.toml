@@ -2,9 +2,10 @@
 useDefault = true
 
 [allowlist]
-description = "Podfile.lock の spec checksums を除外"
+description = "Podfile.lock の spec checksums と FlutterFire の firebase_options を除外"
 paths = [
   '''^src/frontend/aruku_pallarel/ios/Podfile\.lock$''',
+  '''^src/frontend/aruku_pallarel/lib/firebase_options\.dart$''',
 ]
 regexes = [
   '''(?i)^[0-9a-f]{40}$''',

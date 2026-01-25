@@ -6,5 +6,21 @@ part 'auth_guard_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<bool> authGuard(Ref ref) async {
-  return FirebaseAuth.instance.currentUser != null;
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    return false;
+  }
+  try {
+    final token = await user.getIdToken().timeout(
+          const Duration(seconds: 8),
+        );
+    if (token == null || token.isEmpty) {
+      await FirebaseAuth.instance.signOut();
+      return false;
+    }
+    return true;
+  } catch (_) {
+    await FirebaseAuth.instance.signOut();
+    return false;
+  }
 }

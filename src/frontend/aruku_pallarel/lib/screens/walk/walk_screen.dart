@@ -31,7 +31,8 @@ class WalkScreen extends ConsumerStatefulWidget {
   ConsumerState<WalkScreen> createState() => _WalkScreenState();
 }
 
-class _WalkScreenState extends ConsumerState<WalkScreen> {
+class _WalkScreenState extends ConsumerState<WalkScreen>
+    with WidgetsBindingObserver {
   static const LatLng _fallbackCenter = LatLng(35.681236, 139.767125);
   static const Duration _spoofHoldDuration = Duration(seconds: 2);
   static const double _spoofMoveThreshold = 12;
@@ -41,6 +42,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   LatLng? _currentCenter;
   bool _mapReady = false;
   StreamSubscription<locus.Location>? _locationSubscription;
+  ProviderSubscription<WalkSession?>? _activeWalkSubscription;
   final MapController _mapController = MapController();
   final List<LatLng> _routePoints = [];
   String? _routeWalkId;
@@ -52,12 +54,29 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _activeWalkSubscription = ref.listenManual(
+      activeWalkNotifierProvider,
+      (previous, next) {
+        if (next == null || previous?.walkId == next.walkId) {
+          return;
+        }
+        _startTracking();
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
       _startTracking();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncStoredLocations());
+    }
   }
 
   Future<void> _finishWalk() async {
@@ -114,7 +133,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         _recordRoutePoint(spoofState.location!);
         _mapController.move(
           spoofState.location!,
-          _mapController.camera.zoom,
+          _safeZoom(),
         );
       }
       return;
@@ -132,9 +151,18 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       return;
     }
 
+    final lastKnown = await _fetchLastKnownLocation();
+    if (lastKnown != null && mounted && _currentCenter == null) {
+      _recordRoutePoint(lastKnown, updateCenter: true);
+      if (_mapReady) {
+        _mapController.move(lastKnown, _safeZoom());
+      }
+    }
+
     await ref
         .read(walkLocationRecorderNotifierProvider.notifier)
         .startRecording(activeWalk.walkId);
+    unawaited(_syncStoredLocations());
 
     await _locationSubscription?.cancel();
     _locationSubscription = locus.Locus.location.stream.listen(
@@ -152,7 +180,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         }
         _recordRoutePoint(center, updateCenter: true);
         if (_mapReady) {
-          _mapController.move(center, _mapController.camera.zoom);
+          _mapController.move(center, _safeZoom());
         }
       },
       onError: (error) {
@@ -175,7 +203,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         final center = LatLng(coords.latitude, coords.longitude);
         _recordRoutePoint(center, updateCenter: true);
         if (_mapReady) {
-          _mapController.move(center, _mapController.camera.zoom);
+          _mapController.move(center, _safeZoom());
         }
       }
     } catch (error) {
@@ -190,6 +218,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _activeWalkSubscription?.close();
+    WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
     super.dispose();
   }
@@ -200,6 +230,61 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     _spoofPressPosition = null;
     _spoofStartPosition = null;
     _spoofPointerId = null;
+  }
+
+  Future<LatLng?> _fetchLastKnownLocation() async {
+    try {
+      final debugState = await locus.Locus.getState();
+      final location = debugState.location;
+      final coords = location?.coords;
+      if (coords != null && coords.isValid) {
+        return LatLng(coords.latitude, coords.longitude);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _syncStoredLocations() async {
+    final activeWalk = ref.read(activeWalkNotifierProvider);
+    if (activeWalk == null) {
+      return;
+    }
+    final lastLocation = await ref
+        .read(walkLocationRecorderNotifierProvider.notifier)
+        .syncStoredLocations();
+    if (!mounted || lastLocation == null) {
+      return;
+    }
+    if (!ref.read(locationSpoofNotifierProvider).enabled) {
+      _recordRoutePoint(lastLocation, updateCenter: true);
+      if (_mapReady) {
+        _mapController.move(lastLocation, _safeZoom());
+      }
+    }
+    unawaited(_loadRouteForWalk(activeWalk.walkId));
+  }
+
+  double _safeZoom({double fallback = 16}) {
+    final zoom = _mapController.camera.zoom;
+    if (zoom.isFinite) {
+      return zoom;
+    }
+    return fallback;
+  }
+
+  void _applyInitialCenter() {
+    if (!_mapReady) {
+      return;
+    }
+    final spoofState = ref.read(locationSpoofNotifierProvider);
+    final target = spoofState.enabled && spoofState.location != null
+        ? spoofState.location
+        : (_currentCenter ??
+            (_routePoints.isNotEmpty ? _routePoints.last : null));
+    if (target == null) {
+      return;
+    }
+    _mapController.move(target, _safeZoom());
   }
 
   void _onSpoofPointerDown(PointerDownEvent event) {
@@ -257,7 +342,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         .read(walkLocationRecorderNotifierProvider.notifier)
         .recordManualLocation(latLng);
     _recordRoutePoint(latLng);
-    _mapController.move(latLng, _mapController.camera.zoom);
+    _mapController.move(latLng, _safeZoom());
   }
 
   Future<void> _openSettings() async {
@@ -282,7 +367,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     final spoofEnabled = spoofState.enabled;
     final center = spoofEnabled && spoofState.location != null
         ? spoofState.location!
-        : (_currentCenter ?? _fallbackCenter);
+        : (_currentCenter ??
+            (_routePoints.isNotEmpty ? _routePoints.last : _fallbackCenter));
     final routePoints = _routePoints;
 
     final title = activeWalk == null ? 'No active walk' : 'Live walk';
@@ -319,6 +405,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   initialZoom: 16,
                   onMapReady: () {
                     _mapReady = true;
+                    _applyInitialCenter();
                   },
                 ),
                 children: [
@@ -422,9 +509,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       if (!mounted || _routeWalkId != walkId || points.isEmpty) {
         return;
       }
+      LatLng? appliedCenter;
       setState(() {
         if (_routePoints.isEmpty) {
           _routePoints.addAll(points);
+          if (_currentCenter == null) {
+            _currentCenter = _routePoints.last;
+            appliedCenter = _currentCenter;
+          }
           return;
         }
         final merged = <LatLng>[...points];
@@ -436,7 +528,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         _routePoints
           ..clear()
           ..addAll(merged);
+        if (_currentCenter == null && _routePoints.isNotEmpty) {
+          _currentCenter = _routePoints.last;
+          appliedCenter = _currentCenter;
+        }
       });
+      if (!ref.read(locationSpoofNotifierProvider).enabled &&
+          appliedCenter != null &&
+          _mapReady) {
+        _mapController.move(appliedCenter!, _safeZoom());
+      }
     } catch (_) {
       return;
     }

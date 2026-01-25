@@ -10,9 +10,10 @@ part of 'env.dart';
 // ignore_for_file: type=lint
 // generated_from: .env
 final class _Env {
-  static const String backendBaseUrl = 'http://localhost:8000';
+  static const String backendBaseUrl =
+      'https://backend-qy4xa2hucq-uc.a.run.app';
 
-  static const String firebaseProjectId = 'demo-project';
+  static const String firebaseProjectId = 'aruku-parallel';
 
   static const String firebaseAuthEmulatorHost = 'localhost';
 
@@ -22,7 +23,7 @@ final class _Env {
 
   static const int firestoreEmulatorPort = 8080;
 
-  static const bool useEmulators = true;
+  static const bool useEmulators = false;
 
   static const String jawgAccessToken = 'your_jawg_access_token';
 }
