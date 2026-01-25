@@ -23,4 +23,5 @@
 ## Working Conventions
 - 仕様変更は `spec/` を先に更新し、`README.md` は概要とリンクのみに反映する
 - `spec/` 内に新規ドキュメントを追加したら `spec/README.md` に追記する
+- Firebase Auth のサインイン方式は Terraform で管理する
 - バグ修正時は `tasks/` にチケットを起票してから対応する

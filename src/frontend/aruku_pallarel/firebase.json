@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"ios":{"default":{"projectId":"aruku-parallel","appId":"1:867743476530:ios:43d108fe2ff0d44869052b","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"aruku-parallel","configurations":{"ios":"1:867743476530:ios:43d108fe2ff0d44869052b"}}}}}}
