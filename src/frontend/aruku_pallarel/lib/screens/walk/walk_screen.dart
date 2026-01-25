@@ -142,6 +142,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       return;
     }
 
+    final lastKnown = await _fetchLastKnownLocation();
+    if (lastKnown != null && mounted && _currentCenter == null) {
+      _recordRoutePoint(lastKnown, updateCenter: true);
+      if (_mapReady) {
+        _mapController.move(lastKnown, _safeZoom());
+      }
+    }
+
     await ref
         .read(walkLocationRecorderNotifierProvider.notifier)
         .startRecording(activeWalk.walkId);
@@ -213,6 +221,18 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     _spoofPointerId = null;
   }
 
+  Future<LatLng?> _fetchLastKnownLocation() async {
+    try {
+      final debugState = await locus.Locus.getState();
+      final location = debugState.location;
+      final coords = location?.coords;
+      if (coords != null && coords.isValid) {
+        return LatLng(coords.latitude, coords.longitude);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   double _safeZoom({double fallback = 16}) {
     final zoom = _mapController.camera.zoom;
     if (zoom.isFinite) {
@@ -228,7 +248,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     final spoofState = ref.read(locationSpoofNotifierProvider);
     final target = spoofState.enabled && spoofState.location != null
         ? spoofState.location
-        : _currentCenter;
+        : (_currentCenter ??
+            (_routePoints.isNotEmpty ? _routePoints.last : null));
     if (target == null) {
       return;
     }
@@ -315,7 +336,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     final spoofEnabled = spoofState.enabled;
     final center = spoofEnabled && spoofState.location != null
         ? spoofState.location!
-        : (_currentCenter ?? _fallbackCenter);
+        : (_currentCenter ??
+            (_routePoints.isNotEmpty ? _routePoints.last : _fallbackCenter));
     final routePoints = _routePoints;
 
     final title = activeWalk == null ? 'No active walk' : 'Live walk';
@@ -456,9 +478,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       if (!mounted || _routeWalkId != walkId || points.isEmpty) {
         return;
       }
+      LatLng? appliedCenter;
       setState(() {
         if (_routePoints.isEmpty) {
           _routePoints.addAll(points);
+          if (_currentCenter == null) {
+            _currentCenter = _routePoints.last;
+            appliedCenter = _currentCenter;
+          }
           return;
         }
         final merged = <LatLng>[...points];
@@ -470,7 +497,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         _routePoints
           ..clear()
           ..addAll(merged);
+        if (_currentCenter == null && _routePoints.isNotEmpty) {
+          _currentCenter = _routePoints.last;
+          appliedCenter = _currentCenter;
+        }
       });
+      if (!ref.read(locationSpoofNotifierProvider).enabled &&
+          appliedCenter != null &&
+          _mapReady) {
+        _mapController.move(appliedCenter!, _safeZoom());
+      }
     } catch (_) {
       return;
     }
