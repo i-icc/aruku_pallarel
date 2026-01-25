@@ -156,11 +156,29 @@ class WalkHistoryRouteNotifier extends _$WalkHistoryRouteNotifier {
         (a.longitude - b.longitude).abs() < 0.000001;
   }
 
+  bool _isValidCoordinate(double lat, double lon) {
+    if (!lat.isFinite || !lon.isFinite) {
+      return false;
+    }
+    if (lat < -90 || lat > 90) {
+      return false;
+    }
+    if (lon < -180 || lon > 180) {
+      return false;
+    }
+    return true;
+  }
+
   LatLng? _parseStartLocation(Object? rawLocation) {
     if (rawLocation is! GeoPoint) {
       return null;
     }
-    return LatLng(rawLocation.latitude, rawLocation.longitude);
+    final lat = rawLocation.latitude;
+    final lon = rawLocation.longitude;
+    if (!_isValidCoordinate(lat, lon)) {
+      return null;
+    }
+    return LatLng(lat, lon);
   }
 
   List<_TimedPoint> _parsePoints(Object? rawPoints) {
@@ -176,6 +194,11 @@ class WalkHistoryRouteNotifier extends _$WalkHistoryRouteNotifier {
       if (geo is! GeoPoint) {
         continue;
       }
+      final lat = geo.latitude;
+      final lon = geo.longitude;
+      if (!_isValidCoordinate(lat, lon)) {
+        continue;
+      }
       final timestamp = rawPoint['timestamp'];
       DateTime? time;
       if (timestamp is Timestamp) {
@@ -185,7 +208,7 @@ class WalkHistoryRouteNotifier extends _$WalkHistoryRouteNotifier {
       }
       result.add(
         _TimedPoint(
-          position: LatLng(geo.latitude, geo.longitude),
+          position: LatLng(lat, lon),
           timestamp: time,
         ),
       );

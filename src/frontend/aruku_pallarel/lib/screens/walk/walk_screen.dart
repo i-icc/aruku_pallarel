@@ -41,6 +41,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   LatLng? _currentCenter;
   bool _mapReady = false;
   StreamSubscription<locus.Location>? _locationSubscription;
+  ProviderSubscription<WalkSession?>? _activeWalkSubscription;
   final MapController _mapController = MapController();
   final List<LatLng> _routePoints = [];
   String? _routeWalkId;
@@ -52,6 +53,15 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   @override
   void initState() {
     super.initState();
+    _activeWalkSubscription = ref.listenManual(
+      activeWalkNotifierProvider,
+      (previous, next) {
+        if (next == null || previous?.walkId == next.walkId) {
+          return;
+        }
+        _startTracking();
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -114,7 +124,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         _recordRoutePoint(spoofState.location!);
         _mapController.move(
           spoofState.location!,
-          _mapController.camera.zoom,
+          _safeZoom(),
         );
       }
       return;
@@ -152,7 +162,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         }
         _recordRoutePoint(center, updateCenter: true);
         if (_mapReady) {
-          _mapController.move(center, _mapController.camera.zoom);
+          _mapController.move(center, _safeZoom());
         }
       },
       onError: (error) {
@@ -175,7 +185,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         final center = LatLng(coords.latitude, coords.longitude);
         _recordRoutePoint(center, updateCenter: true);
         if (_mapReady) {
-          _mapController.move(center, _mapController.camera.zoom);
+          _mapController.move(center, _safeZoom());
         }
       }
     } catch (error) {
@@ -190,6 +200,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _activeWalkSubscription?.close();
     _cancelSpoofTimer();
     super.dispose();
   }
@@ -200,6 +211,28 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     _spoofPressPosition = null;
     _spoofStartPosition = null;
     _spoofPointerId = null;
+  }
+
+  double _safeZoom({double fallback = 16}) {
+    final zoom = _mapController.camera.zoom;
+    if (zoom.isFinite) {
+      return zoom;
+    }
+    return fallback;
+  }
+
+  void _applyInitialCenter() {
+    if (!_mapReady) {
+      return;
+    }
+    final spoofState = ref.read(locationSpoofNotifierProvider);
+    final target = spoofState.enabled && spoofState.location != null
+        ? spoofState.location
+        : _currentCenter;
+    if (target == null) {
+      return;
+    }
+    _mapController.move(target, _safeZoom());
   }
 
   void _onSpoofPointerDown(PointerDownEvent event) {
@@ -257,7 +290,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
         .read(walkLocationRecorderNotifierProvider.notifier)
         .recordManualLocation(latLng);
     _recordRoutePoint(latLng);
-    _mapController.move(latLng, _mapController.camera.zoom);
+    _mapController.move(latLng, _safeZoom());
   }
 
   Future<void> _openSettings() async {
@@ -319,6 +352,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
                   initialZoom: 16,
                   onMapReady: () {
                     _mapReady = true;
+                    _applyInitialCenter();
                   },
                 ),
                 children: [
