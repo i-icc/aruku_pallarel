@@ -6,7 +6,6 @@ import urllib.request
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
-
 class AdkClient:
     def __init__(
         self,
