@@ -27,12 +27,16 @@ Interceptor authTokenInterceptor(Ref ref) {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         try {
-          final token = await user.getIdToken();
-          if (token != null) {
+          final token = await user.getIdToken().timeout(
+                const Duration(seconds: 8),
+              );
+          if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
+          } else {
+            await FirebaseAuth.instance.signOut();
           }
         } catch (_) {
-          // Allow request to continue without token if retrieval fails.
+          await FirebaseAuth.instance.signOut();
         }
       }
       handler.next(options);

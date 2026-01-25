@@ -31,7 +31,8 @@ class WalkScreen extends ConsumerStatefulWidget {
   ConsumerState<WalkScreen> createState() => _WalkScreenState();
 }
 
-class _WalkScreenState extends ConsumerState<WalkScreen> {
+class _WalkScreenState extends ConsumerState<WalkScreen>
+    with WidgetsBindingObserver {
   static const LatLng _fallbackCenter = LatLng(35.681236, 139.767125);
   static const Duration _spoofHoldDuration = Duration(seconds: 2);
   static const double _spoofMoveThreshold = 12;
@@ -53,6 +54,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _activeWalkSubscription = ref.listenManual(
       activeWalkNotifierProvider,
       (previous, next) {
@@ -68,6 +70,13 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       }
       _startTracking();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncStoredLocations());
+    }
   }
 
   Future<void> _finishWalk() async {
@@ -153,6 +162,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
     await ref
         .read(walkLocationRecorderNotifierProvider.notifier)
         .startRecording(activeWalk.walkId);
+    unawaited(_syncStoredLocations());
 
     await _locationSubscription?.cancel();
     _locationSubscription = locus.Locus.location.stream.listen(
@@ -209,6 +219,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
   void dispose() {
     _locationSubscription?.cancel();
     _activeWalkSubscription?.close();
+    WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
     super.dispose();
   }
@@ -231,6 +242,26 @@ class _WalkScreenState extends ConsumerState<WalkScreen> {
       }
     } catch (_) {}
     return null;
+  }
+
+  Future<void> _syncStoredLocations() async {
+    final activeWalk = ref.read(activeWalkNotifierProvider);
+    if (activeWalk == null) {
+      return;
+    }
+    final lastLocation = await ref
+        .read(walkLocationRecorderNotifierProvider.notifier)
+        .syncStoredLocations();
+    if (!mounted || lastLocation == null) {
+      return;
+    }
+    if (!ref.read(locationSpoofNotifierProvider).enabled) {
+      _recordRoutePoint(lastLocation, updateCenter: true);
+      if (_mapReady) {
+        _mapController.move(lastLocation, _safeZoom());
+      }
+    }
+    unawaited(_loadRouteForWalk(activeWalk.walkId));
   }
 
   double _safeZoom({double fallback = 16}) {

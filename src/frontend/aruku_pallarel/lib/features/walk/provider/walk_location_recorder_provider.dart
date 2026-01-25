@@ -60,12 +60,13 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
   final List<_LocationPoint> _buffer = [];
   bool _flushInProgress = false;
   bool _flushPending = false;
-  Future<void>? _flushFuture;
+  Future<bool>? _flushFuture;
   bool _batchLoaded = false;
   int _currentBatchIndex = 1;
   int _currentBatchCount = 0;
   String? _walkId;
   String? _userId;
+  DateTime? _lastRecordedAt;
   bool _requestInFlight = false;
   double _distanceSinceRequest = 0;
   DateTime? _lastRequestOkAt;
@@ -96,6 +97,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     _walkId = walkId;
     _userId = user.uid;
     _resetSuggestionState();
+    _lastRecordedAt = null;
     await _loadLatestBatch(user.uid, walkId);
     state = state.copyWith(isRecording: true, errorMessage: null);
 
@@ -108,16 +110,13 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
         if (!coords.isValid) {
           return;
         }
-        _buffer.add(
+        _appendLivePoint(
           _LocationPoint(
             timestamp: location.timestamp,
             latitude: coords.latitude,
             longitude: coords.longitude,
           ),
         );
-        state = state.copyWith(bufferCount: _buffer.length);
-        _handleSuggestionTrigger(_buffer.last);
-        _requestFlush();
       },
       onError: (error) {
         state = state.copyWith(errorMessage: error.toString());
@@ -129,16 +128,13 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     if (!state.isRecording || _walkId == null || _userId == null) {
       return;
     }
-    _buffer.add(
+    _appendLivePoint(
       _LocationPoint(
         timestamp: DateTime.now(),
         latitude: location.latitude,
         longitude: location.longitude,
       ),
     );
-    state = state.copyWith(bufferCount: _buffer.length);
-    _handleSuggestionTrigger(_buffer.last);
-    _requestFlush();
   }
 
   Future<void> stopRecording({bool flush = true}) async {
@@ -157,6 +153,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     _resetSuggestionState();
     _walkId = null;
     _userId = null;
+    _lastRecordedAt = null;
     state = state.copyWith(isRecording: false, bufferCount: 0);
   }
 
@@ -169,14 +166,14 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     unawaited(_flushFuture);
   }
 
-  Future<void> _flushBuffer() async {
+  Future<bool> _flushBuffer() async {
     if (_flushInProgress || _buffer.isEmpty) {
-      return;
+      return true;
     }
     final walkId = _walkId;
     final userId = _userId;
     if (walkId == null || userId == null) {
-      return;
+      return false;
     }
 
     _flushInProgress = true;
@@ -225,6 +222,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     if (success && (_buffer.isNotEmpty || _flushPending)) {
       _requestFlush();
     }
+    return success;
   }
 
   Future<bool> _writeBatchChunk(
@@ -325,6 +323,71 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     _distanceSinceRequest = 0;
     _lastDistancePoint = null;
     _lastRequestOkAt = null;
+  }
+
+  void _appendLivePoint(_LocationPoint point) {
+    _buffer.add(point);
+    _lastRecordedAt = point.timestamp;
+    state = state.copyWith(bufferCount: _buffer.length);
+    _handleSuggestionTrigger(point);
+    _requestFlush();
+  }
+
+  Future<LatLng?> syncStoredLocations({int limit = 200}) async {
+    if (!state.isRecording || _walkId == null || _userId == null) {
+      return null;
+    }
+    try {
+      final stored = await locus.Locus.location.getLocations(limit: limit);
+      if (stored.isEmpty) {
+        return null;
+      }
+
+      final points = <_LocationPoint>[];
+      for (final location in stored) {
+        final coords = location.coords;
+        if (!coords.isValid) {
+          continue;
+        }
+        final timestamp = location.timestamp;
+        final lastRecordedAt = _lastRecordedAt;
+        if (lastRecordedAt != null && !timestamp.isAfter(lastRecordedAt)) {
+          continue;
+        }
+        points.add(
+          _LocationPoint(
+            timestamp: timestamp,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          ),
+        );
+      }
+
+      if (points.isEmpty) {
+        await locus.Locus.location.destroyLocations();
+        return null;
+      }
+
+      points.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+      _buffer.addAll(points);
+      _lastRecordedAt = points.last.timestamp;
+      state = state.copyWith(bufferCount: _buffer.length);
+      for (final point in points) {
+        _updateDistance(point);
+      }
+
+      final flushed = await _flushBuffer();
+      if (flushed) {
+        await locus.Locus.location.destroyLocations();
+      }
+
+      final last = points.last;
+      return LatLng(last.latitude, last.longitude);
+    } catch (error) {
+      state = state.copyWith(errorMessage: error.toString());
+      return null;
+    }
   }
 
   void _handleSuggestionTrigger(_LocationPoint point) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -39,6 +41,18 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
   String _firestoreStatus = 'pending';
   bool _loading = false;
   bool _walkLoading = false;
+
+  Future<LatLng?> _fetchLastKnownLocation() async {
+    try {
+      final state = await locus.Locus.getState();
+      final location = state.location;
+      final coords = location?.coords;
+      if (coords != null && coords.isValid) {
+        return LatLng(coords.latitude, coords.longitude);
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   void initState() {
@@ -96,11 +110,51 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
     var navigated = false;
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          await context.router.replaceAll([const LoginRoute()]);
+        }
+        return;
+      }
+      try {
+        final token = await user.getIdToken().timeout(
+              const Duration(seconds: 8),
+            );
+        if (token == null || token.isEmpty) {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            await context.router.replaceAll([const LoginRoute()]);
+          }
+          return;
+        }
+      } catch (_) {
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          await context.router.replaceAll([const LoginRoute()]);
+        }
+        return;
+      }
+
       final spoofState = ref.read(locationSpoofNotifierProvider);
       final spoofLocation = spoofState.enabled ? spoofState.location : null;
       LatLng? startLocation = spoofLocation;
       if (startLocation == null) {
-        final granted = await trackingNotifier.startTracking();
+        bool granted = false;
+        try {
+          granted = await trackingNotifier
+              .startTracking()
+              .timeout(const Duration(seconds: 10));
+        } on TimeoutException {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Location setup timed out. Try again.'),
+              ),
+            );
+          }
+          return;
+        }
         if (!granted) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -116,17 +170,20 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
           final current = await locus.LocusLocation.getCurrentPosition(
             timeout: 15,
             maximumAge: 0,
-          );
+          ).timeout(const Duration(seconds: 10));
           final coords = current.coords;
           if (coords.isValid) {
             startLocation = LatLng(coords.latitude, coords.longitude);
           }
+        } on TimeoutException {
+          startLocation = await _fetchLastKnownLocation();
         } catch (error) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Failed to get current location: $error')),
             );
           }
+          startLocation = await _fetchLastKnownLocation();
         }
       }
       if (startLocation == null) {
