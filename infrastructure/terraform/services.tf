@@ -5,6 +5,7 @@ locals {
     "artifactregistry.googleapis.com",
     "firestore.googleapis.com",
     "firebase.googleapis.com",
+    "firebaserules.googleapis.com",
     "identitytoolkit.googleapis.com",
     "aiplatform.googleapis.com",
     "iam.googleapis.com",

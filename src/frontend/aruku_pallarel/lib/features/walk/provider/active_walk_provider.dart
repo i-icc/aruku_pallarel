@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../share/services/backend_exception.dart';
@@ -19,13 +20,22 @@ class ActiveWalkNotifier extends _$ActiveWalkNotifier {
       state = null;
       return null;
     }
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('walks')
-        .where('status', isEqualTo: 'active')
-        .limit(1)
-        .get();
+    final QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('walks')
+          .where('status', isEqualTo: 'active')
+          .limit(1)
+          .get();
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') {
+        state = null;
+        return null;
+      }
+      rethrow;
+    }
     if (snapshot.docs.isEmpty) {
       state = null;
       return null;

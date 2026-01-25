@@ -1,15 +1,16 @@
-import 'dart:io';
-
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:locus/locus.dart' as locus;
 
 import '../../features/authentication/provider/user_profile_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/location_spoof_provider.dart';
+import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../router/app_router.dart';
 import '../../theme/app_styles.dart';
 import '../../widgets/app_background.dart';
@@ -70,18 +71,14 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
 
   Future<String> _pingFirestore() async {
     final user = FirebaseAuth.instance.currentUser;
-    final docId = user?.uid ?? 'anonymous';
+    if (user == null) {
+      return 'signed-out';
+    }
     try {
       await FirebaseFirestore.instance
-          .collection('debug')
-          .doc(docId)
-          .set(
-            {
-              'updatedAt': FieldValue.serverTimestamp(),
-              'client': Platform.operatingSystem,
-            },
-            SetOptions(merge: true),
-          );
+          .collection('users')
+          .doc(user.uid)
+          .get();
       return 'ok';
     } catch (error) {
       return 'error ($error)';
@@ -93,20 +90,58 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
       _walkLoading = true;
     });
 
+    final trackingNotifier = ref.read(walkTrackingNotifierProvider.notifier);
+    final wasTracking = ref.read(walkTrackingNotifierProvider).isTracking;
+    var stopTrackingOnFailure = false;
+    var navigated = false;
+
     try {
-      const fallbackLat = 35.681236;
-      const fallbackLon = 139.767125;
       final spoofState = ref.read(locationSpoofNotifierProvider);
       final spoofLocation = spoofState.enabled ? spoofState.location : null;
-      final startLat = spoofLocation?.latitude ?? fallbackLat;
-      final startLon = spoofLocation?.longitude ?? fallbackLon;
+      LatLng? startLocation = spoofLocation;
+      if (startLocation == null) {
+        final granted = await trackingNotifier.startTracking();
+        if (!granted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Location permission is required.'),
+              ),
+            );
+          }
+          return;
+        }
+        stopTrackingOnFailure = !wasTracking;
+        try {
+          final current = await locus.LocusLocation.getCurrentPosition(
+            timeout: 15,
+            maximumAge: 0,
+          );
+          final coords = current.coords;
+          if (coords.isValid) {
+            startLocation = LatLng(coords.latitude, coords.longitude);
+          }
+        } catch (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to get current location: $error')),
+            );
+          }
+        }
+      }
+      if (startLocation == null) {
+        const fallbackLat = 35.681236;
+        const fallbackLon = 139.767125;
+        startLocation = const LatLng(fallbackLat, fallbackLon);
+      }
       await ref.read(activeWalkNotifierProvider.notifier).startWalk(
-            lat: startLat,
-            lon: startLon,
+            lat: startLocation.latitude,
+            lon: startLocation.longitude,
           );
       if (!mounted) {
         return;
       }
+      navigated = true;
       await context.router.push(const WalkRoute());
     } on BackendException catch (error) {
       if (!mounted) {
@@ -131,6 +166,9 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
         );
       }
     } finally {
+      if (!navigated && stopTrackingOnFailure) {
+        await trackingNotifier.stopTracking();
+      }
       if (mounted) {
         setState(() {
           _walkLoading = false;
