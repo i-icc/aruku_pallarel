@@ -82,12 +82,14 @@
 - 079: Terraform の OSRM カスタムイメージ（東京データ）反映
 - 078: Terraform の Cloud Run/Firebase 設定見直し
 - 080: Cloud Run/Cloud Tasks/OSRM デプロイ動作確認
+- 081: Flutter 本番接続準備（Firebase/環境変数/トークン）
+- 082: Firebase Auth の Email/Password 有効化とログイン状態整理
+- 083: Firestore 権限エラーと現在地フォールバックの調査/修正（→ 085/086）
 - 084: Terraform で Firestore ルール/インデックス管理へ移行
 
 ## 未着手(優先順位順)
-- 083: Firestore 権限エラーと現在地フォールバックの調査/修正
-- 082: Firebase Auth の Email/Password 有効化とログイン状態整理
-- 081: Flutter 本番接続準備（Firebase/環境変数/トークン）
+- 085: 散歩開始時の現在地センタリング調整
+- 086: History 画面の Polyline NaN エラー修正
 - 037: チャット機能のタスク分解
 
 ## 廃止（置き換え済み）
@@ -95,4 +97,4 @@
 
 ## 最終更新
 最終更新日: 2026-01-25
-前回完了タスク: 084
+前回完了タスク: 083
