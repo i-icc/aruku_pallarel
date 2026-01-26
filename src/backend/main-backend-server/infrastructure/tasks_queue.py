@@ -102,8 +102,15 @@ class TasksQueueClient:
                 ),
             )
         )
+        dispatch_deadline_seconds = max(self._timeout_seconds, 15)
+        if dispatch_deadline_seconds != self._timeout_seconds:
+            logger.info(
+                "tasks_dispatch_deadline_adjusted requested=%s adjusted=%s",
+                self._timeout_seconds,
+                dispatch_deadline_seconds,
+            )
         task.dispatch_deadline = duration_pb2.Duration(
-            seconds=self._timeout_seconds
+            seconds=dispatch_deadline_seconds
         )
 
         try:

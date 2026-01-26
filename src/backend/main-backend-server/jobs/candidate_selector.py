@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from .geo import EARTH_RADIUS_M, is_unexplored
+from .osm_client import OsmNoSegmentError
 from .location_models import LocationPoint
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,11 @@ def select_candidate(
 
     for attempt in range(1, attempts + 1):
         candidate = _random_point_in_circle(center, radius_m, rng)
-        snapped = osm_client.nearest_road(candidate.lat, candidate.lon)
+        try:
+            snapped = osm_client.nearest_road(candidate.lat, candidate.lon)
+        except OsmNoSegmentError as exc:
+            logger.info("candidate_rejected reason=osm_no_segment detail=%s", exc)
+            continue
         if is_unexplored(snapped, polyline, threshold_m=10.0):
             return CandidateResult(candidate=candidate, snapped=snapped, attempts=attempt)
         logger.info(

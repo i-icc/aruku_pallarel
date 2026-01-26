@@ -252,7 +252,12 @@ def _send_fcm_notification(
         "lon": f"{lon:.6f}",
     }
     try:
-        _fcm_client().send(token=token, data=data)
+        _fcm_client().send(
+            token=token,
+            data=data,
+            title="ここ面白いかも、、",
+            body=message,
+        )
     except Exception as exc:
         current_app.logger.warning(
             "fcm_failed user_id=%s error=%s", user_id, exc

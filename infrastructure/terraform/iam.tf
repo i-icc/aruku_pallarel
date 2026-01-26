@@ -16,6 +16,7 @@ locals {
 
   adk_roles = [
     "roles/logging.logWriter",
+    "roles/aiplatform.user",
   ]
 
   osm_roles = [
@@ -98,4 +99,22 @@ resource "google_cloud_run_v2_service_iam_member" "suggest_job_invoker_tasks" {
   location = var.region
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.tasks_invoker.email}"
+}
+
+resource "google_service_account_iam_member" "tasks_invoker_token_creator" {
+  service_account_id = google_service_account.tasks_invoker.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudtasks.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "tasks_invoker_act_as" {
+  service_account_id = google_service_account.tasks_invoker.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudtasks.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "tasks_invoker_act_as_backend" {
+  service_account_id = google_service_account.tasks_invoker.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.backend.email}"
 }
