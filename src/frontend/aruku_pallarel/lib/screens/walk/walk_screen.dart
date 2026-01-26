@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -44,11 +45,15 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   bool _finishLoading = false;
   String? _locationError;
   LatLng? _currentCenter;
+  double? _compassHeading;
+  double? _movementHeading;
   bool _mapReady = false;
   StreamSubscription<locus.Location>? _locationSubscription;
+  StreamSubscription<CompassEvent>? _compassSubscription;
   ProviderSubscription<WalkSession?>? _activeWalkSubscription;
   final MapController _mapController = MapController();
   late final AnimationController _mapMoveController;
+  late final AnimationController _headingPulseController;
   LatLng? _mapMoveStart;
   LatLng? _mapMoveTarget;
   double? _mapMoveZoom;
@@ -69,6 +74,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     )
       ..value = 1.0
       ..addListener(_handleMapMoveTick);
+    _headingPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+    _startCompass();
     WidgetsBinding.instance.addObserver(this);
     _activeWalkSubscription = ref.listenManual(
       activeWalkNotifierProvider,
@@ -145,7 +155,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       await _locationSubscription?.cancel();
       _locationSubscription = null;
       if (_mapReady && spoofState.location != null) {
-        _recordRoutePoint(spoofState.location!);
+        _recordRoutePoint(spoofState.location!, updateHeading: true);
         _animateMapMove(spoofState.location!);
       }
       return;
@@ -165,7 +175,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
 
     final lastKnown = await _fetchLastKnownLocation();
     if (lastKnown != null && mounted && _currentCenter == null) {
-      _recordRoutePoint(lastKnown, updateCenter: true);
+      _recordRoutePoint(
+        lastKnown,
+        updateCenter: true,
+        updateHeading: true,
+      );
       if (_mapReady) {
         _animateMapMove(lastKnown);
       }
@@ -190,7 +204,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         if (!mounted) {
           return;
         }
-        _recordRoutePoint(center, updateCenter: true);
+        _recordRoutePoint(
+          center,
+          updateCenter: true,
+          updateHeading: true,
+          heading: coords.heading,
+        );
         if (_mapReady) {
           _animateMapMove(center);
         }
@@ -213,7 +232,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       final coords = current.coords;
       if (coords.isValid && mounted) {
         final center = LatLng(coords.latitude, coords.longitude);
-        _recordRoutePoint(center, updateCenter: true);
+        _recordRoutePoint(
+          center,
+          updateCenter: true,
+          updateHeading: true,
+          heading: coords.heading,
+        );
         if (_mapReady) {
           _animateMapMove(center);
         }
@@ -230,10 +254,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   @override
   void dispose() {
     _locationSubscription?.cancel();
+    _compassSubscription?.cancel();
     _activeWalkSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
     _mapMoveController.dispose();
+    _headingPulseController.dispose();
     super.dispose();
   }
 
@@ -269,7 +295,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return;
     }
     if (!ref.read(locationSpoofNotifierProvider).enabled) {
-      _recordRoutePoint(lastLocation, updateCenter: true);
+      _recordRoutePoint(
+        lastLocation,
+        updateCenter: true,
+        updateHeading: true,
+      );
       if (_mapReady) {
         _animateMapMove(lastLocation);
       }
@@ -283,6 +313,40 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return zoom;
     }
     return fallback;
+  }
+
+  void _startCompass() {
+    final stream = FlutterCompass.events;
+    if (stream == null) {
+      return;
+    }
+    _compassSubscription = stream.listen(
+      (event) {
+        final heading = _normalizeHeading(event.heading);
+        if (!mounted || heading == null) {
+          return;
+        }
+        final previous = _compassHeading;
+        if (previous != null && (previous - heading).abs() < 0.5) {
+          return;
+        }
+        setState(() {
+          _compassHeading = heading;
+        });
+      },
+      onError: (_) {},
+    );
+  }
+
+  double? _normalizeHeading(double? heading) {
+    if (heading == null || !heading.isFinite) {
+      return null;
+    }
+    var normalized = heading % 360;
+    if (normalized < 0) {
+      normalized += 360;
+    }
+    return normalized;
   }
 
   double _catmullT(double t, LatLng p0, LatLng p1) {
@@ -340,7 +404,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final t3 = _catmullT(t2, p2, p3);
     final segment = <LatLng>[];
     for (var i = 0; i <= _routeSplineSteps; i++) {
-      final t = lerpDouble(t1, t2, i / _routeSplineSteps) ?? t1;
+      final t = ui.lerpDouble(t1, t2, i / _routeSplineSteps) ?? t1;
       segment.add(_catmullRomPoint(p0, p1, p2, p3, t0, t1, t2, t3, t));
     }
     return segment;
@@ -367,9 +431,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
 
   LatLng _lerpLatLng(LatLng start, LatLng target, double t) {
     final lat =
-        lerpDouble(start.latitude, target.latitude, t) ?? target.latitude;
+        ui.lerpDouble(start.latitude, target.latitude, t) ?? target.latitude;
     final lng =
-        lerpDouble(start.longitude, target.longitude, t) ?? target.longitude;
+        ui.lerpDouble(start.longitude, target.longitude, t) ?? target.longitude;
     return LatLng(lat, lng);
   }
 
@@ -386,20 +450,61 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     return _lerpLatLng(start, target, t);
   }
 
-  List<LatLng> _buildAnimatedRoutePoints(
-    List<LatLng> routePoints,
-    LatLng animatedCenter,
-  ) {
-    if (routePoints.isEmpty) {
-      return routePoints;
-    }
-    final last = routePoints.last;
-    if (_isSamePoint(last, animatedCenter)) {
-      return routePoints;
-    }
-    final displayPoints = List<LatLng>.from(routePoints);
-    displayPoints[displayPoints.length - 1] = animatedCenter;
-    return displayPoints;
+  Widget _buildHeadingMarker(double? heading) {
+    final normalized = _normalizeHeading(heading);
+    return AnimatedBuilder(
+      animation: _headingPulseController,
+      builder: (context, child) {
+        final pulse = Curves.easeOut.transform(_headingPulseController.value);
+        final ringSize = ui.lerpDouble(18, 44, pulse) ?? 44;
+        final ringOpacity = (1 - pulse) * 0.35;
+        return SizedBox(
+          width: 48,
+          height: 48,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: ringSize,
+                height: ringSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.accent.withValues(alpha: ringOpacity * 0.4),
+                  border: Border.all(
+                    color:
+                        AppColors.accent.withValues(alpha: ringOpacity + 0.05),
+                    width: 2,
+                  ),
+                ),
+              ),
+              if (normalized != null)
+                Transform.rotate(
+                  angle: normalized * pi / 180,
+                  child: CustomPaint(
+                    size: const Size(48, 48),
+                    painter: _HeadingConePainter(
+                      color: AppColors.accent.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 2,
+                  ),
+                  boxShadow: AppShadows.tight,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _handleMapMoveTick() {
@@ -505,7 +610,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     ref
         .read(walkLocationRecorderNotifierProvider.notifier)
         .recordManualLocation(latLng);
-    _recordRoutePoint(latLng);
+    _recordRoutePoint(latLng, updateHeading: true);
     _animateMapMove(latLng);
   }
 
@@ -581,46 +686,26 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                     userAgentPackageName: 'com.example.arukuPallarel',
                   ),
                   if (routePoints.length > 1)
-                    AnimatedBuilder(
-                      animation: _mapMoveController,
-                      builder: (context, child) {
-                        final animatedCenter = _resolveAnimatedCenter(center);
-                        final displayPoints = _buildAnimatedRoutePoints(
-                          routePoints,
-                          animatedCenter,
-                        );
-                        if (displayPoints.length < 2) {
-                          return const SizedBox.shrink();
-                        }
-                        return PolylineLayer(
-                          polylines: [
-                            Polyline(
-                              points: displayPoints,
-                              strokeWidth: 4,
-                              color: AppColors.accent.withValues(alpha: 0.7),
-                            ),
-                          ],
-                        );
-                      },
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: routePoints,
+                          strokeWidth: 4,
+                          color: AppColors.accent.withValues(alpha: 0.7),
+                        ),
+                      ],
                     ),
-                  AnimatedBuilder(
-                    animation: _mapMoveController,
-                    builder: (context, child) {
-                      final animatedCenter = _resolveAnimatedCenter(center);
-                      return MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: animatedCenter,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(
-                              Icons.my_location,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: center,
+                        width: 48,
+                        height: 48,
+                        child: _buildHeadingMarker(
+                          _compassHeading ?? _movementHeading,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -662,13 +747,24 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         (a.longitude - b.longitude).abs() < 0.000001;
   }
 
-  void _recordRoutePoint(LatLng point, {bool updateCenter = false}) {
+  void _recordRoutePoint(
+    LatLng point, {
+    bool updateCenter = false,
+    bool updateHeading = false,
+    double? heading,
+  }) {
     if (!mounted) {
       return;
     }
     setState(() {
       if (updateCenter) {
         _currentCenter = point;
+      }
+      if (updateHeading) {
+        final normalized = _normalizeHeading(heading);
+        if (normalized != null) {
+          _movementHeading = normalized;
+        }
       }
       if (_routePoints.isEmpty || !_isSamePoint(_routePoints.last, point)) {
         _routePoints.add(point);
@@ -908,5 +1004,37 @@ class _Notice extends StatelessWidget {
             ),
       ),
     );
+  }
+}
+
+class _HeadingConePainter extends CustomPainter {
+  const _HeadingConePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    const sweep = pi / 3;
+    final startAngle = -pi / 2 - sweep / 2;
+    final path = ui.Path()
+      ..moveTo(center.dx, center.dy)
+      ..arcTo(
+        ui.Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweep,
+        false,
+      )
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeadingConePainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }

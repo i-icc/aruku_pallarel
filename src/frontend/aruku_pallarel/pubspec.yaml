@@ -49,6 +49,7 @@ dependencies:
   locus: ^2.0.1
   permission_handler: ^12.0.1
   url_launcher: ^6.3.2
+  flutter_compass: ^0.8.0
   google_fonts: ^7.1.0
 
 dev_dependencies:
