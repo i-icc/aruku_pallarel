@@ -34,6 +34,12 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
   LatLng? _pendingCenter;
 
   @override
+  void initState() {
+    super.initState();
+    ref.invalidate(walkHistoryRouteNotifierProvider(widget.walkId));
+  }
+
+  @override
   void dispose() {
     _mapController.dispose();
     super.dispose();
