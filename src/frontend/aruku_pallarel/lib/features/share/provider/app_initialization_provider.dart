@@ -10,6 +10,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../firebase_options.dart';
 import '../../../env/env.dart';
 import '../../authentication/infrastructure/user_api.dart';
+import '../../walk/provider/active_walk_provider.dart';
+import '../../walk/provider/walk_suggestion_provider.dart';
 
 part 'app_initialization_provider.g.dart';
 
@@ -79,9 +81,37 @@ Future<void> _setupMessaging(Ref ref) async {
       }
       await syncToken(await messaging.getToken());
     });
+
+    void handleSuggestionMessage(RemoteMessage message) {
+      final data = message.data;
+      if (data.isEmpty) {
+        return;
+      }
+      final walkId = data['walkId']?.toString();
+      final suggestId = data['suggestId']?.toString();
+      if (walkId == null || walkId.isEmpty || suggestId == null || suggestId.isEmpty) {
+        return;
+      }
+      final activeWalkId = ref.read(activeWalkNotifierProvider)?.walkId;
+      if (activeWalkId != null && activeWalkId != walkId) {
+        return;
+      }
+      ref.read(selectedSuggestNotifierProvider.notifier).select(walkId, suggestId);
+    }
+
+    final messageSub = FirebaseMessaging.onMessage.listen(handleSuggestionMessage);
+    final openedSub =
+        FirebaseMessaging.onMessageOpenedApp.listen(handleSuggestionMessage);
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) {
+      handleSuggestionMessage(initialMessage);
+    }
+
     ref.onDispose(() {
       tokenSub.cancel();
       authSub.cancel();
+      messageSub.cancel();
+      openedSub.cancel();
     });
   } catch (_) {
     // Ignore messaging setup errors to avoid blocking app launch.
