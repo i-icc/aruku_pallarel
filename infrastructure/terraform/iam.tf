@@ -16,6 +16,7 @@ locals {
 
   adk_roles = [
     "roles/logging.logWriter",
+    "roles/aiplatform.user",
   ]
 
   osm_roles = [
