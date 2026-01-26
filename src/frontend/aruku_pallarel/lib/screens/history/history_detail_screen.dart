@@ -32,6 +32,17 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
   bool _mapReady = false;
   LatLngBounds? _pendingBounds;
   LatLng? _pendingCenter;
+  bool _didInvalidate = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInvalidate) {
+      return;
+    }
+    _didInvalidate = true;
+    ref.invalidate(walkHistoryRouteNotifierProvider(widget.walkId));
+  }
 
   @override
   void dispose() {

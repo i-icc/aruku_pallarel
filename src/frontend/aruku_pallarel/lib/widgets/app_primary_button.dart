@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_styles.dart';
 
@@ -41,10 +42,11 @@ class AppPrimaryButton extends StatelessWidget {
               ],
               Text(
                 label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: GoogleFonts.mPlusRounded1c(
+                  textStyle: Theme.of(context).textTheme.titleMedium,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           );
