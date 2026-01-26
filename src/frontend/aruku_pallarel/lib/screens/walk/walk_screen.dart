@@ -46,6 +46,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   bool _finishLoading = false;
   String? _locationError;
   LatLng? _currentCenter;
+  double? _currentHeading;
   bool _mapReady = false;
   StreamSubscription<locus.Location>? _locationSubscription;
   ProviderSubscription<WalkSession?>? _activeWalkSubscription;
@@ -147,6 +148,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       await ref
           .read(walkLocationRecorderNotifierProvider.notifier)
           .startRecording(activeWalk.walkId);
+      setState(() {
+        _currentHeading = null;
+      });
       await _locationSubscription?.cancel();
       _locationSubscription = null;
       if (_mapReady && spoofState.location != null) {
@@ -196,7 +200,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         if (!mounted) {
           return;
         }
-        _recordRoutePoint(center, updateCenter: true);
+        final heading = _extractHeading(coords);
+        _recordRoutePoint(center, updateCenter: true, heading: heading);
         if (_mapReady) {
           _animateMapMove(center);
         }
@@ -285,8 +290,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         return;
       }
       final center = LatLng(coords.latitude, coords.longitude);
+      final heading = _extractHeading(coords);
       setState(() {
         _currentCenter = center;
+        if (heading != null && heading.isFinite) {
+          _currentHeading = heading;
+        }
       });
       if (_mapReady) {
         _animateMapMove(center);
@@ -437,6 +446,62 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     }
     final t = Curves.easeInOutCubic.transform(_mapMoveController.value);
     return _lerpLatLng(start, target, t);
+  }
+
+  double? _extractHeading(Object coords) {
+    final dynamic dynamicCoords = coords;
+    try {
+      final headingValue = dynamicCoords.heading;
+      if (headingValue is num && headingValue.isFinite) {
+        return headingValue.toDouble();
+      }
+    } catch (_) {}
+    try {
+      final bearingValue = dynamicCoords.bearing;
+      if (bearingValue is num && bearingValue.isFinite) {
+        return bearingValue.toDouble();
+      }
+    } catch (_) {}
+    try {
+      final courseValue = dynamicCoords.course;
+      if (courseValue is num && courseValue.isFinite) {
+        return courseValue.toDouble();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Widget _buildLocationMarker(double? heading) {
+    final resolvedHeading =
+        heading != null && heading.isFinite ? heading : null;
+    if (resolvedHeading == null) {
+      return const Icon(
+        Icons.my_location,
+        color: AppColors.accent,
+      );
+    }
+    final radians = resolvedHeading * (pi / 180);
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.2),
+            shape: BoxShape.circle,
+          ),
+        ),
+        Transform.rotate(
+          angle: radians,
+          child: const Icon(
+            Icons.navigation,
+            color: AppColors.accent,
+            size: 28,
+          ),
+        ),
+      ],
+    );
   }
 
   List<LatLng> _buildAnimatedRoutePoints(
@@ -664,12 +729,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                         markers: [
                           Marker(
                             point: animatedCenter,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(
-                              Icons.my_location,
-                              color: AppColors.accent,
-                            ),
+                            width: 48,
+                            height: 48,
+                            child: _buildLocationMarker(_currentHeading),
                           ),
                         ],
                       );
@@ -715,13 +777,20 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         (a.longitude - b.longitude).abs() < 0.000001;
   }
 
-  void _recordRoutePoint(LatLng point, {bool updateCenter = false}) {
+  void _recordRoutePoint(
+    LatLng point, {
+    bool updateCenter = false,
+    double? heading,
+  }) {
     if (!mounted) {
       return;
     }
     setState(() {
       if (updateCenter) {
         _currentCenter = point;
+        if (heading != null && heading.isFinite) {
+          _currentHeading = heading;
+        }
       }
       if (_routePoints.isEmpty || !_isSamePoint(_routePoints.last, point)) {
         _routePoints.add(point);
