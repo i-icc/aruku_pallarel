@@ -40,6 +40,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   static const Duration _mapMoveDuration = Duration(milliseconds: 600);
   static const int _routeSplineSteps = 8;
   static const double _routeSplineAlpha = 0.5;
+  static const Duration _liveLocationInterval = Duration(seconds: 3);
+  static const Duration _liveLocationTimeout = Duration(seconds: 5);
 
   bool _finishLoading = false;
   String? _locationError;
@@ -56,6 +58,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   final List<LatLng> _routePoints = [];
   String? _routeWalkId;
   Timer? _spoofTimer;
+  Timer? _liveLocationTimer;
+  bool _liveLocationRequesting = false;
   Offset? _spoofPressPosition;
   Offset? _spoofStartPosition;
   int? _spoofPointerId;
@@ -105,6 +109,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           .read(walkLocationRecorderNotifierProvider.notifier)
           .stopRecording();
       await ref.read(walkTrackingNotifierProvider.notifier).stopTracking();
+      _stopLiveLocationUpdates();
       if (!mounted) {
         return;
       }
@@ -174,6 +179,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     await ref
         .read(walkLocationRecorderNotifierProvider.notifier)
         .startRecording(activeWalk.walkId);
+    _startLiveLocationUpdates();
     unawaited(_syncStoredLocations());
 
     await _locationSubscription?.cancel();
@@ -233,6 +239,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _activeWalkSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
+    _stopLiveLocationUpdates();
     _mapMoveController.dispose();
     super.dispose();
   }
@@ -243,6 +250,52 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _spoofPressPosition = null;
     _spoofStartPosition = null;
     _spoofPointerId = null;
+  }
+
+  void _startLiveLocationUpdates() {
+    _stopLiveLocationUpdates();
+    _liveLocationTimer = Timer.periodic(_liveLocationInterval, (_) {
+      if (!mounted || ref.read(locationSpoofNotifierProvider).enabled) {
+        return;
+      }
+      unawaited(_refreshLiveLocation());
+    });
+  }
+
+  void _stopLiveLocationUpdates() {
+    _liveLocationTimer?.cancel();
+    _liveLocationTimer = null;
+  }
+
+  Future<void> _refreshLiveLocation() async {
+    if (_liveLocationRequesting) {
+      return;
+    }
+    _liveLocationRequesting = true;
+    try {
+      final current = await locus.LocusLocation.getCurrentPosition(
+        timeout: _liveLocationTimeout.inSeconds,
+        maximumAge: 0,
+      );
+      if (!mounted || ref.read(locationSpoofNotifierProvider).enabled) {
+        return;
+      }
+      final coords = current.coords;
+      if (!coords.isValid) {
+        return;
+      }
+      final center = LatLng(coords.latitude, coords.longitude);
+      setState(() {
+        _currentCenter = center;
+      });
+      if (_mapReady) {
+        _animateMapMove(center);
+      }
+    } catch (_) {
+      return;
+    } finally {
+      _liveLocationRequesting = false;
+    }
   }
 
   Future<LatLng?> _fetchLastKnownLocation() async {
