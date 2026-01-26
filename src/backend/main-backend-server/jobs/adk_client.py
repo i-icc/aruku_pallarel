@@ -1,11 +1,11 @@
 import json
 import os
+import socket
 import urllib.error
 import urllib.request
 
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
-
 
 class AdkClient:
     def __init__(
@@ -18,7 +18,7 @@ class AdkClient:
         self._base_url = base_url or os.getenv("ADK_BASE_URL")
         self._app_name = app_name or os.getenv("ADK_APP_NAME")
         self._timeout_seconds = int(
-            timeout_seconds or os.getenv("ADK_TIMEOUT_SECONDS", "10")
+            timeout_seconds or os.getenv("ADK_TIMEOUT_SECONDS", "30")
         )
         self._id_token_audience = id_token_audience or os.getenv(
             "ADK_ID_TOKEN_AUDIENCE"
@@ -91,6 +91,10 @@ class AdkClient:
                 request_obj, timeout=self._timeout_seconds
             ) as response:
                 return response.status, response.read()
+        except (TimeoutError, socket.timeout) as exc:
+            raise RuntimeError(
+                f"ADK request timed out: url={url} timeout={self._timeout_seconds}s"
+            ) from exc
         except urllib.error.HTTPError as exc:
             return exc.code, exc.read()
         except urllib.error.URLError as exc:

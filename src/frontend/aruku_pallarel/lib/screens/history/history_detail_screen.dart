@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../theme/app_styles.dart';
@@ -30,6 +31,18 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
   final MapController _mapController = MapController();
   bool _mapReady = false;
   LatLngBounds? _pendingBounds;
+  LatLng? _pendingCenter;
+  bool _didInvalidate = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInvalidate) {
+      return;
+    }
+    _didInvalidate = true;
+    ref.invalidate(walkHistoryRouteNotifierProvider(widget.walkId));
+  }
 
   @override
   void dispose() {
@@ -40,6 +53,7 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
   void _applyBounds(LatLngBounds bounds) {
     if (!_mapReady) {
       _pendingBounds = bounds;
+      _pendingCenter = null;
       return;
     }
     _mapController.fitCamera(
@@ -48,6 +62,30 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
         padding: const EdgeInsets.all(32),
       ),
     );
+  }
+
+  void _applyCenter(LatLng center) {
+    if (!_mapReady) {
+      _pendingCenter = center;
+      _pendingBounds = null;
+      return;
+    }
+    _mapController.move(center, _safeZoom());
+  }
+
+  double _safeZoom({double fallback = 15}) {
+    final zoom = _mapController.camera.zoom;
+    if (zoom.isFinite) {
+      return zoom;
+    }
+    return fallback;
+  }
+
+  bool _hasArea(LatLngBounds bounds) {
+    const epsilon = 0.000001;
+    final latSpan = (bounds.north - bounds.south).abs();
+    final lonSpan = (bounds.east - bounds.west).abs();
+    return latSpan > epsilon || lonSpan > epsilon;
   }
 
   @override
@@ -75,7 +113,11 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
             if (!mounted) {
               return;
             }
-            _applyBounds(bounds);
+            if (_hasArea(bounds)) {
+              _applyBounds(bounds);
+            } else {
+              _applyCenter(points.first);
+            }
           });
           final start = points.first;
           final end = points.last;
@@ -95,6 +137,12 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
                           if (pending != null) {
                             _pendingBounds = null;
                             _applyBounds(pending);
+                            return;
+                          }
+                          final pendingCenter = _pendingCenter;
+                          if (pendingCenter != null) {
+                            _pendingCenter = null;
+                            _applyCenter(pendingCenter);
                           }
                         },
                       ),
@@ -104,15 +152,16 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
                           subdomains: mapTheme.subdomains,
                           userAgentPackageName: 'com.example.arukuPallarel',
                         ),
-                        PolylineLayer(
-                          polylines: [
-                            Polyline(
-                              points: points,
-                              strokeWidth: 4,
-                              color: AppColors.accent,
-                            ),
-                          ],
-                        ),
+                        if (points.length > 1)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: points,
+                                strokeWidth: 4,
+                                color: AppColors.accent,
+                              ),
+                            ],
+                          ),
                         MarkerLayer(
                           markers: [
                             Marker(

@@ -93,6 +93,11 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
             distanceFilter: _distanceFilterMeters,
             autoSync: false,
             batchSync: false,
+            stopOnTerminate: false,
+            enableHeadless: true,
+            persistMode: locus.PersistMode.location,
+            maxDaysToPersist: 7,
+            maxRecordsToPersist: 200,
             notification: const locus.NotificationConfig(
               title: 'Walk tracking',
               text: 'Tracking location in the background',

@@ -24,7 +24,7 @@ final dioClientProvider = Provider<Dio>.internal(
 // ignore: unused_element
 typedef DioClientRef = ProviderRef<Dio>;
 String _$authTokenInterceptorHash() =>
-    r'22e294efd02e43e6b0e833cbcb410de439f8c219';
+    r'e5a2a5e9bc9ea383332319b64f037c917f2efc26';
 
 /// See also [authTokenInterceptor].
 @ProviderFor(authTokenInterceptor)
