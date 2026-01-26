@@ -1,5 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../widgets/app_background.dart';
 
@@ -13,10 +14,15 @@ class ChatScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Chat'),
       ),
-      body: const AppBackground(
+      body: AppBackground(
         safeAreaTop: false,
         child: Center(
-          child: Text('Chat is coming soon.'),
+          child: Text(
+            'Chat is coming soon.',
+            style: GoogleFonts.zenMaruGothic(
+              textStyle: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
         ),
       ),
     );

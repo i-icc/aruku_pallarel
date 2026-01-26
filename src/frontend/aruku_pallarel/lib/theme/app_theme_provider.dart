@@ -10,8 +10,8 @@ part 'app_theme_provider.g.dart';
 @Riverpod(keepAlive: true)
 ThemeData appTheme(Ref ref) {
   final base = ThemeData.light(useMaterial3: true);
-  final bodyText = GoogleFonts.manropeTextTheme(base.textTheme);
-  final displayText = GoogleFonts.syneTextTheme(base.textTheme);
+  final systemText = GoogleFonts.kosugiMaruTextTheme(base.textTheme);
+  final roundedText = GoogleFonts.mPlusRounded1cTextTheme(base.textTheme);
 
   return base.copyWith(
     colorScheme: const ColorScheme(
@@ -28,69 +28,69 @@ ThemeData appTheme(Ref ref) {
       outline: AppColors.border,
     ),
     scaffoldBackgroundColor: AppColors.base,
-    textTheme: bodyText.copyWith(
-      displayLarge: displayText.displayLarge?.copyWith(
+    textTheme: systemText.copyWith(
+      displayLarge: systemText.displayLarge?.copyWith(
         fontSize: 36,
         fontWeight: FontWeight.w700,
         height: 1.1,
         letterSpacing: -0.8,
         color: AppColors.ink,
       ),
-      displayMedium: displayText.displayMedium?.copyWith(
+      displayMedium: systemText.displayMedium?.copyWith(
         fontSize: 28,
         fontWeight: FontWeight.w700,
         height: 1.1,
         letterSpacing: -0.6,
         color: AppColors.ink,
       ),
-      headlineLarge: displayText.headlineLarge?.copyWith(
+      headlineLarge: systemText.headlineLarge?.copyWith(
         fontSize: 24,
         fontWeight: FontWeight.w600,
         height: 1.2,
         letterSpacing: -0.4,
         color: AppColors.ink,
       ),
-      titleLarge: displayText.titleLarge?.copyWith(
+      titleLarge: systemText.titleLarge?.copyWith(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         height: 1.2,
         letterSpacing: -0.2,
         color: AppColors.ink,
       ),
-      titleMedium: displayText.titleMedium?.copyWith(
+      titleMedium: systemText.titleMedium?.copyWith(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         height: 1.2,
         color: AppColors.ink,
       ),
-      bodyLarge: bodyText.bodyLarge?.copyWith(
+      bodyLarge: systemText.bodyLarge?.copyWith(
         fontSize: 16,
         height: 1.5,
         color: AppColors.ink,
       ),
-      bodyMedium: bodyText.bodyMedium?.copyWith(
+      bodyMedium: systemText.bodyMedium?.copyWith(
         fontSize: 13,
         height: 1.45,
         color: AppColors.inkMuted,
       ),
-      bodySmall: bodyText.bodySmall?.copyWith(
+      bodySmall: systemText.bodySmall?.copyWith(
         fontSize: 12,
         height: 1.4,
         color: AppColors.inkMuted,
       ),
-      labelLarge: GoogleFonts.spaceMono(
+      labelLarge: roundedText.labelLarge?.copyWith(
         fontSize: 11,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.6,
         color: AppColors.inkMuted,
       ),
-      labelMedium: GoogleFonts.spaceMono(
+      labelMedium: roundedText.labelMedium?.copyWith(
         fontSize: 10,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.5,
         color: AppColors.inkMuted,
       ),
-      labelSmall: GoogleFonts.spaceMono(
+      labelSmall: roundedText.labelSmall?.copyWith(
         fontSize: 9,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.4,
@@ -101,7 +101,7 @@ ThemeData appTheme(Ref ref) {
       backgroundColor: Colors.transparent,
       elevation: 0,
       foregroundColor: AppColors.ink,
-      titleTextStyle: displayText.titleLarge?.copyWith(
+      titleTextStyle: systemText.titleLarge?.copyWith(
         color: AppColors.ink,
         fontWeight: FontWeight.w600,
       ),
@@ -144,7 +144,7 @@ ThemeData appTheme(Ref ref) {
           borderRadius: BorderRadius.circular(AppRadii.medium),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        textStyle: displayText.titleMedium?.copyWith(
+        textStyle: roundedText.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -157,7 +157,7 @@ ThemeData appTheme(Ref ref) {
           borderRadius: BorderRadius.circular(AppRadii.medium),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        textStyle: displayText.titleMedium?.copyWith(
+        textStyle: roundedText.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
         ),
       ),
