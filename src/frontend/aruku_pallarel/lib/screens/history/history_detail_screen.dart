@@ -158,7 +158,7 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
                               Polyline(
                                 points: points,
                                 strokeWidth: 4,
-                                color: AppColors.accent,
+                                color: const Color(0xFF36FF97),
                               ),
                             ],
                           ),

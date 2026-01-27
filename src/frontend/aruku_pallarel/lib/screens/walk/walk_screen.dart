@@ -574,11 +574,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       animation: _headingPulseController,
       builder: (context, child) {
         final pulse = Curves.easeOut.transform(_headingPulseController.value);
-        final ringSize = ui.lerpDouble(18, 44, pulse) ?? 44;
+        // 元の 18–44px をベースに、白と色の比率はほぼそのままに 2.5倍相当へ拡大
+        final ringSize = ui.lerpDouble(45, 120, pulse) ?? 120;
         final ringOpacity = (1 - pulse) * 0.35;
         return SizedBox(
-          width: 48,
-          height: 48,
+          width: 120,
+          height: 120,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -587,11 +588,13 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                 height: ringSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.accent.withValues(alpha: ringOpacity * 0.4),
+                  // 波の色は薄めにして、白い輪郭がしっかり見えるように
+                  color:
+                      const Color(0xFF36FF97).withValues(alpha: ringOpacity * 0.25),
                   border: Border.all(
-                    color:
-                        AppColors.accent.withValues(alpha: ringOpacity + 0.05),
-                    width: 2,
+                    // 枠線は 2px → 約2.5倍の 5px で白の存在感をキープ
+                    color: Colors.white.withValues(alpha: ringOpacity + 0.05),
+                    width: 5,
                   ),
                 ),
               ),
@@ -599,21 +602,21 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                 Transform.rotate(
                   angle: normalized * pi / 180,
                   child: CustomPaint(
-                    size: const Size(48, 48),
+                    size: const Size(120, 120),
                     painter: _HeadingConePainter(
-                      color: AppColors.accent.withValues(alpha: 0.2),
+                      color: const Color(0xFF36FF97).withValues(alpha: 0.2),
                     ),
                   ),
                 ),
               Container(
-                width: 14,
-                height: 14,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
-                  color: AppColors.accent,
+                  color: const Color(0xFF36FF97),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: Colors.white,
-                    width: 2,
+                    width: 5.5,
                   ),
                   boxShadow: AppShadows.tight,
                 ),
@@ -847,7 +850,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                         Polyline(
                           points: routePoints,
                           strokeWidth: 4,
-                          color: AppColors.accent.withValues(alpha: 0.7),
+                          color:
+                              const Color(0xFF36FF97).withValues(alpha: 0.7),
                         ),
                       ],
                     ),
