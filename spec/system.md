@@ -72,7 +72,9 @@ flowchart TB
 
 ### 位置更新
 1. App は Locus の位置更新ストリームを購読する（distanceFilter: 15m）
-2. 位置が更新されたときのみ Firestore の `locations` に追記
+2. App → Backend: 位置更新を送信（バックグラウンド時は必須）
+3. Backend → Firestore: `locations` に追記（64件/ドキュメントで分割）
+4. 条件を満たす場合は Backend が提案リクエストを発行する
 
 ### 履歴/提案の閲覧
 1. App は Firestore から `walks` / `suggests` / `chat` を読み取る

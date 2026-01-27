@@ -21,6 +21,11 @@ class WalkRepository(Protocol):
     def finish_walk(self, user_id: str, walk_id: str) -> None:
         raise NotImplementedError
 
+    def append_location_points(
+        self, user_id: str, walk_id: str, points: list[LocationPoint]
+    ) -> None:
+        raise NotImplementedError
+
     def get_location_points(self, user_id: str, walk_id: str) -> list[LocationPoint]:
         raise NotImplementedError
 
@@ -79,6 +84,29 @@ def finish_walk(
         started_at=None,
         finished_at=now,
     )
+
+
+def append_locations(
+    repo: WalkRepository,
+    user_id: str,
+    walk_id: str,
+    points: list[LocationPoint],
+) -> bool:
+    data = repo.get_walk(user_id, walk_id)
+    if data is None:
+        raise AppError("WALK_NOT_FOUND", "Walk not found", 404)
+
+    if data.get("status") != "active":
+        logger.info(
+            "location_append_ng reason=walk_inactive user_id=%s walk_id=%s status=%s",
+            user_id,
+            walk_id,
+            data.get("status"),
+        )
+        return False
+
+    repo.append_location_points(user_id, walk_id, points)
+    return True
 
 
 def request_suggestion(

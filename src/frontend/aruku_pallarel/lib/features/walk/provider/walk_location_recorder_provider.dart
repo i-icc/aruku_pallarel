@@ -1,7 +1,4 @@
 import 'dart:async';
-import 'dart:math';
-
-import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:latlong2/latlong.dart';
@@ -10,6 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'location_spoof_provider.dart';
 import '../infrastructure/walk_api.dart';
+import '../models/location_append_point.dart';
 import '../../share/services/backend_exception.dart';
 
 part 'walk_location_recorder_provider.g.dart';
@@ -53,24 +51,14 @@ class _LocationPoint {
 @Riverpod(keepAlive: true)
 class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
   static const int _maxBatchSize = 64;
-  static const Duration _suggestionCooldown = Duration(minutes: 5);
-  static const double _suggestionMinDistanceMeters = 250;
 
   StreamSubscription<locus.Location>? _subscription;
   final List<_LocationPoint> _buffer = [];
   bool _flushInProgress = false;
   bool _flushPending = false;
   Future<bool>? _flushFuture;
-  bool _batchLoaded = false;
-  int _currentBatchIndex = 1;
-  int _currentBatchCount = 0;
   String? _walkId;
-  String? _userId;
   DateTime? _lastRecordedAt;
-  bool _requestInFlight = false;
-  double _distanceSinceRequest = 0;
-  DateTime? _lastRequestOkAt;
-  _LocationPoint? _lastDistancePoint;
 
   @override
   WalkLocationRecorderState build() {
@@ -95,10 +83,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     }
 
     _walkId = walkId;
-    _userId = user.uid;
-    _resetSuggestionState();
     _lastRecordedAt = null;
-    await _loadLatestBatch(user.uid, walkId);
     state = state.copyWith(isRecording: true, errorMessage: null);
 
     _subscription = locus.Locus.location.stream.listen(
@@ -125,7 +110,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
   }
 
   void recordManualLocation(LatLng location) {
-    if (!state.isRecording || _walkId == null || _userId == null) {
+    if (!state.isRecording || _walkId == null) {
       return;
     }
     _appendLivePoint(
@@ -149,10 +134,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       }
     }
     _buffer.clear();
-    _resetBatchState();
-    _resetSuggestionState();
     _walkId = null;
-    _userId = null;
     _lastRecordedAt = null;
     state = state.copyWith(isRecording: false, bufferCount: 0);
   }
@@ -171,8 +153,7 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       return true;
     }
     final walkId = _walkId;
-    final userId = _userId;
-    if (walkId == null || userId == null) {
+    if (walkId == null) {
       return false;
     }
 
@@ -180,26 +161,16 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     _flushPending = false;
     var success = true;
     try {
-      if (!_batchLoaded) {
-        await _loadLatestBatch(userId, walkId);
-      }
       while (_buffer.isNotEmpty) {
-        if (_currentBatchCount >= _maxBatchSize) {
-          _currentBatchIndex += 1;
-          _currentBatchCount = 0;
-        }
-        final capacity = _maxBatchSize - _currentBatchCount;
         final takeCount =
-            _buffer.length > capacity ? capacity : _buffer.length;
+            _buffer.length > _maxBatchSize ? _maxBatchSize : _buffer.length;
         final chunk = _buffer.take(takeCount).toList();
         _buffer.removeRange(0, takeCount);
         state = state.copyWith(bufferCount: _buffer.length);
-        final chunkSuccess = await _writeBatchChunk(
-          userId,
+        final chunkSuccess = await _sendPoints(
           walkId,
-          _currentBatchIndex,
-          _currentBatchCount == 0,
           chunk,
+          source: 'foreground',
         );
         if (!chunkSuccess) {
           _buffer.insertAll(0, chunk);
@@ -207,7 +178,6 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
           success = false;
           break;
         }
-        _currentBatchCount += chunk.length;
       }
     } catch (error) {
       state = state.copyWith(
@@ -225,116 +195,19 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     return success;
   }
 
-  Future<bool> _writeBatchChunk(
-    String userId,
-    String walkId,
-    int batchIndex,
-    bool isNewBatch,
-    List<_LocationPoint> points,
-  ) async {
-    final firestoreInstance = firestore.FirebaseFirestore.instance;
-    final batchRef = firestoreInstance
-        .collection('users')
-        .doc(userId)
-        .collection('walks')
-        .doc(walkId)
-        .collection('locations')
-        .doc(batchIndex.toString());
-
-    final payload = points
-        .map(
-          (point) => {
-            'timestamp': firestore.Timestamp.fromDate(point.timestamp),
-            'geo': firestore.GeoPoint(point.latitude, point.longitude),
-          },
-        )
-        .toList();
-
-    final data = <String, Object?>{
-      'index': batchIndex,
-      'count': firestore.FieldValue.increment(points.length),
-      'points': firestore.FieldValue.arrayUnion(payload),
-      'updatedAt': firestore.FieldValue.serverTimestamp(),
-    };
-    if (isNewBatch) {
-      data['createdAt'] = firestore.FieldValue.serverTimestamp();
-    }
-    await batchRef.set(data, firestore.SetOptions(merge: true));
-    return true;
-  }
-
-  Future<void> _loadLatestBatch(String userId, String walkId) async {
-    _batchLoaded = false;
-    _currentBatchIndex = 1;
-    _currentBatchCount = 0;
-    try {
-      final snapshot = await firestore.FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('walks')
-          .doc(walkId)
-          .collection('locations')
-          .orderBy('index', descending: true)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isEmpty) {
-        _batchLoaded = true;
-        return;
-      }
-      final doc = snapshot.docs.first;
-      final data = doc.data();
-      final indexValue = data['index'];
-      final countValue = data['count'];
-      final resolvedIndex = indexValue is int
-          ? indexValue
-          : int.tryParse(doc.id) ?? 1;
-      var resolvedCount = 0;
-      if (countValue is int) {
-        resolvedCount = countValue;
-      } else if (data['points'] is List) {
-        resolvedCount = (data['points'] as List).length;
-      }
-      if (resolvedCount >= _maxBatchSize) {
-        _currentBatchIndex = resolvedIndex + 1;
-        _currentBatchCount = 0;
-      } else {
-        _currentBatchIndex = resolvedIndex;
-        _currentBatchCount = resolvedCount;
-      }
-    } catch (error) {
-      state = state.copyWith(errorMessage: error.toString());
-    } finally {
-      _batchLoaded = true;
-    }
-  }
-
-  void _resetBatchState() {
-    _batchLoaded = false;
-    _currentBatchIndex = 1;
-    _currentBatchCount = 0;
-  }
-
   void _dispose() {
     _subscription?.cancel();
-  }
-
-  void _resetSuggestionState() {
-    _requestInFlight = false;
-    _distanceSinceRequest = 0;
-    _lastDistancePoint = null;
-    _lastRequestOkAt = null;
   }
 
   void _appendLivePoint(_LocationPoint point) {
     _buffer.add(point);
     _lastRecordedAt = point.timestamp;
     state = state.copyWith(bufferCount: _buffer.length);
-    _handleSuggestionTrigger(point);
     _requestFlush();
   }
 
   Future<LatLng?> syncStoredLocations({int limit = 200}) async {
-    if (!state.isRecording || _walkId == null || _userId == null) {
+    if (!state.isRecording || _walkId == null) {
       return null;
     }
     try {
@@ -370,14 +243,12 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
       points.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
-      _buffer.addAll(points);
       _lastRecordedAt = points.last.timestamp;
-      state = state.copyWith(bufferCount: _buffer.length);
-      for (final point in points) {
-        _updateDistance(point);
-      }
-
-      final flushed = await _flushBuffer();
+      final flushed = await _sendPoints(
+        _walkId!,
+        points,
+        source: 'background',
+      );
       if (flushed) {
         await locus.Locus.location.destroyLocations();
       }
@@ -390,109 +261,49 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     }
   }
 
-  void _handleSuggestionTrigger(_LocationPoint point) {
-    if (!state.isRecording || _walkId == null) {
-      return;
-    }
-
-    _updateDistance(point);
-    _maybeRequestSuggestion(point);
-  }
-
-  void _updateDistance(_LocationPoint point) {
-    final lastPoint = _lastDistancePoint;
-    if (lastPoint == null) {
-      _lastDistancePoint = point;
-      return;
-    }
-    _distanceSinceRequest += _haversineDistanceMeters(
-      lastPoint.latitude,
-      lastPoint.longitude,
-      point.latitude,
-      point.longitude,
-    );
-    _lastDistancePoint = point;
-  }
-
-  Future<void> _maybeRequestSuggestion(_LocationPoint point) async {
-    if (_requestInFlight) {
-      return;
-    }
-    final walkId = _walkId;
-    if (walkId == null) {
-      return;
-    }
-
-    final now = DateTime.now();
-    final baseline = _lastRequestOkAt;
-    if (baseline != null && now.difference(baseline) < _suggestionCooldown) {
-      return;
-    }
-    if (_distanceSinceRequest < _suggestionMinDistanceMeters) {
-      return;
-    }
-
-    _requestInFlight = true;
-    try {
-      await _ensureFlushed();
-      _debugLog(
-        'suggestion_request send walkId=$walkId distance=${_distanceSinceRequest.toStringAsFixed(1)}m',
-      );
-      final api = ref.read(walkApiProvider);
-      final result = await api.requestSuggestion(walkId);
-      _debugLog(
-        'suggestion_request result=${result.result} requestId=${result.requestId ?? '-'}',
-      );
-      if (result.isOk) {
-        _lastRequestOkAt = now;
-        _distanceSinceRequest = 0;
-        _lastDistancePoint = point;
-      }
-    } on BackendException catch (error) {
-      _debugLog('suggestion_request error=${error.code}');
-      state = state.copyWith(errorMessage: error.message);
-    } catch (error) {
-      _debugLog('suggestion_request error=$error');
-      state = state.copyWith(errorMessage: error.toString());
-    } finally {
-      _requestInFlight = false;
-    }
-  }
-
-  Future<void> _ensureFlushed() async {
-    if (_flushInProgress && _flushFuture != null) {
-      await _flushFuture;
-      return;
-    }
-    if (_buffer.isNotEmpty) {
-      await _flushBuffer();
-    }
-  }
-
-  double _haversineDistanceMeters(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const radius = 6371000;
-    final dLat = _toRadians(lat2 - lat1);
-    final dLon = _toRadians(lon2 - lon1);
-    final lat1Rad = _toRadians(lat1);
-    final lat2Rad = _toRadians(lat2);
-
-    final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1Rad) * cos(lat2Rad) * sin(dLon / 2) * sin(dLon / 2);
-    final c = 2 * asin(sqrt(a));
-    return radius * c;
-  }
-
-  double _toRadians(double degree) => degree * (pi / 180);
-
   void _debugLog(String message) {
     assert(() {
       debugPrint(message);
       return true;
     }());
+  }
+
+  Future<bool> _sendPoints(
+    String walkId,
+    List<_LocationPoint> points, {
+    required String source,
+  }) async {
+    if (points.isEmpty) {
+      return true;
+    }
+    final api = ref.read(walkApiProvider);
+    final payload = points
+        .map(
+          (point) => LocationAppendPoint(
+            timestamp: point.timestamp,
+            latitude: point.latitude,
+            longitude: point.longitude,
+          ),
+        )
+        .toList();
+    try {
+      final result = await api.appendLocations(
+        walkId: walkId,
+        points: payload,
+        source: source,
+      );
+      if (!result.isOk) {
+        _debugLog('location_append result=${result.locationResult}');
+      }
+      return result.isOk;
+    } on BackendException catch (error) {
+      _debugLog('location_append error=${error.code}');
+      state = state.copyWith(errorMessage: error.message);
+      return false;
+    } catch (error) {
+      _debugLog('location_append error=$error');
+      state = state.copyWith(errorMessage: error.toString());
+      return false;
+    }
   }
 }

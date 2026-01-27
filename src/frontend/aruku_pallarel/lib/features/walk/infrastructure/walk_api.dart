@@ -4,6 +4,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../share/provider/dio_client_provider.dart';
 import '../../share/services/backend_exception.dart';
+import '../models/location_append_point.dart';
+import '../models/location_append_result.dart';
 import '../models/suggestion_request_result.dart';
 import '../models/walk_session.dart';
 
@@ -55,6 +57,29 @@ class WalkApi {
       final data = response.data;
       if (data is Map<String, dynamic>) {
         return SuggestionRequestResult.fromJson(data);
+      }
+      throw BackendException('INVALID_RESPONSE', 'Invalid response format.');
+    } on DioException catch (error) {
+      throw backendExceptionFromDio(error);
+    }
+  }
+
+  Future<LocationAppendResult> appendLocations({
+    required String walkId,
+    required List<LocationAppendPoint> points,
+    String source = 'foreground',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/v1/walks/$walkId/locations:append',
+        data: {
+          'points': points.map((point) => point.toJson()).toList(),
+          'source': source,
+        },
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return LocationAppendResult.fromJson(data);
       }
       throw BackendException('INVALID_RESPONSE', 'Invalid response format.');
     } on DioException catch (error) {

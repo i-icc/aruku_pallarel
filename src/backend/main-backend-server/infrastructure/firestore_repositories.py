@@ -93,6 +93,81 @@ class FirestoreWalkRepository:
             merge=True,
         )
 
+    def append_location_points(self, user_id, walk_id, points, max_batch_size=64):
+        if not points:
+            return
+
+        locations_ref = (
+            self._walks_ref(user_id).document(walk_id).collection("locations")
+        )
+        snapshots = list(locations_ref.stream())
+        batches = {}
+        max_index = 0
+        for snapshot in snapshots:
+            data = snapshot.to_dict() or {}
+            index = data.get("index")
+            if not isinstance(index, int):
+                try:
+                    index = int(snapshot.id)
+                except (TypeError, ValueError):
+                    index = 0
+            if index <= 0:
+                continue
+            batches[index] = data
+            max_index = max(max_index, index)
+
+        current_index = max_index if max_index > 0 else 1
+        current_data = batches.get(current_index, {})
+        current_points = current_data.get("points")
+        if not isinstance(current_points, list):
+            current_points = []
+        current_count = current_data.get("count")
+        if not isinstance(current_count, int):
+            current_count = len(current_points)
+
+        if current_count >= max_batch_size:
+            current_index += 1
+            current_count = 0
+            current_points = []
+
+        points = sorted(points, key=lambda entry: entry.timestamp)
+        remaining = list(points)
+
+        while remaining:
+            if current_count >= max_batch_size:
+                current_index += 1
+                current_count = 0
+                current_points = []
+            capacity = max_batch_size - current_count
+            take_count = min(len(remaining), capacity)
+            chunk = remaining[:take_count]
+            remaining = remaining[take_count:]
+
+            payload_points = [
+                {
+                    "timestamp": point.timestamp,
+                    "geo": firestore.GeoPoint(point.lat, point.lon),
+                }
+                for point in chunk
+            ]
+
+            combined = list(current_points) + payload_points
+            data = {
+                "index": current_index,
+                "count": len(combined),
+                "points": combined,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }
+            if current_count == 0 and current_index not in batches:
+                data["createdAt"] = firestore.SERVER_TIMESTAMP
+
+            doc_ref = locations_ref.document(str(current_index))
+            doc_ref.set(data, merge=True)
+
+            current_points = combined
+            current_count = len(combined)
+            batches[current_index] = {"points": current_points, "count": current_count}
+
     def get_location_points(self, user_id, walk_id):
         locations_ref = (
             self._walks_ref(user_id).document(walk_id).collection("locations")

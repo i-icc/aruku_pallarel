@@ -7,7 +7,7 @@
 - Content-Type: `application/json`
 - 失敗時は `{ "error": { "code": "...", "message": "..." } }` を返す
 
-> 位置情報の書き込みや履歴の読み取りはクライアントから Firestore へ直接行う（MVP）。
+> 位置情報の書き込みは Backend 経由で行う（バックグラウンド含む）。履歴の読み取りはクライアントから Firestore へ直接行う（MVP）。
 
 ---
 
@@ -116,6 +116,38 @@
   "finishedAt": "2025-01-03T10:00:00Z"
 }
 ```
+
+### POST /v1/walks/{walkId}/locations:append
+位置情報を追記し、条件を満たす場合は提案リクエストも発行する。
+
+#### Request
+```json
+{
+  "points": [
+    { "timestamp": "2025-01-03T09:20:00Z", "lat": 35.0, "lon": 139.0, "accuracyM": 12.3 }
+  ],
+  "source": "background"
+}
+```
+
+`points` は 1 件以上。`source` は `foreground` / `background` の任意。
+
+#### Response
+```json
+{
+  "locationResult": "ok",
+  "suggestion": {
+    "result": "ok",
+    "requestId": "01JABCDEFG..."
+  }
+}
+```
+
+`suggestion.result: ng` の場合は理由は返さず、ログのみ残す。
+
+#### 補足
+- `locations` は 64 件/ドキュメントで連番追記する
+- 提案判定は `/v1/walks/{walkId}/suggestions:request` と同じ条件を使う
 
 ### POST /v1/walks/{walkId}/suggestions:request
 提案生成のリクエスト（非同期）。
