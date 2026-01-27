@@ -894,7 +894,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                               points: routePoints,
                               strokeWidth: 4,
                               color:
-                                  const Color(0xFF36FF97).withValues(alpha: 0.7),
+                                  const Color(0xFF36FF97).withValues(alpha: 0.8),
                             ),
                           ],
                         ),
@@ -948,7 +948,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                   Align(
                     alignment: Alignment.center,
                     child: FractionallySizedBox(
-                      widthFactor: 0.6,
+                      widthFactor: 0.55,
                       child: _MainActionButton(
                         label: mainButtonState.label,
                         isLoading: mainButtonState.isLoading,
@@ -961,8 +961,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             ),
           ),
           Positioned(
-            left: 16,
-            bottom: 32,
+            left: 28,
+            bottom: 28,
             child: SafeArea(
               top: false,
               right: false,
@@ -1332,23 +1332,31 @@ class _MainActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !isLoading;
+    const baseColors = [
+      Color(0xFFDFFF33),
+      Color(0xFF3FFF8B),
+      Color(0xFF22FFD9),
+    ];
+    // 外側は内側のグラデを少し白に寄せた色にして、「白がかかった縁」に近づける
+    final outerColors = baseColors
+        .map(
+          (color) => Color.lerp(color, Colors.white, 0.72)!, // さらに白寄りに
+        )
+        .toList();
     return GestureDetector(
       onTap: enabled ? onPressed : null,
       child: Container(
-        height: 56,
+        height: 68, // 既存より約 1.2 倍の縦幅
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          // 外側: グラデに白がかかった縁＋影
+          gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [
-              Color(0xFFDFFF33),
-              Color(0xFF3FFF8B),
-              Color(0xFF22FFD9),
-            ],
-            stops: [0.0, 0.5, 1.0],
+            colors: outerColors,
+            stops: const [0.0, 0.5, 1.0],
           ),
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(34),
           boxShadow: const [
             BoxShadow(
               color: Color(0x55000000),
@@ -1359,10 +1367,16 @@ class _MainActionButton extends StatelessWidget {
           ],
         ),
         child: Container(
-          margin: const EdgeInsets.all(3), // 内側 3px に白をかぶせる
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(25),
-            color: Colors.white.withOpacity(0.3),
+          // 内側 3px 分を色のコアにする
+          margin: const EdgeInsets.all(6),
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(30)),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: baseColors,
+              stops: [0.0, 0.5, 1.0],
+            ),
           ),
           alignment: Alignment.center,
           child: isLoading
@@ -1413,9 +1427,9 @@ class _ChatFloatingButton extends StatelessWidget {
           ],
         ),
         child: const Icon(
-          Icons.chat_bubble_outline,
-          color: AppColors.accent,
-          size: 30,
+          Icons.chat, // 塗りつぶしアイコン
+          color: Colors.grey, // 上部カードと同系色
+          size: 32,
         ),
       ),
     );
