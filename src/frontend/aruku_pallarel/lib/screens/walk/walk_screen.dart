@@ -26,6 +26,7 @@ import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_primary_button.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+import '../../router/app_router.dart';
 
 @RoutePage()
 class WalkScreen extends ConsumerStatefulWidget {
@@ -53,6 +54,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   StreamSubscription<locus.Location>? _locationSubscription;
   StreamSubscription<CompassEvent>? _compassSubscription;
   ProviderSubscription<WalkSession?>? _activeWalkSubscription;
+  ProviderSubscription<SelectedSuggestState>? _selectedSuggestSubscription;
   final MapController _mapController = MapController();
   late final AnimationController _mapMoveController;
   late final AnimationController _headingPulseController;
@@ -83,7 +85,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
-    ref.listen<SelectedSuggestState>(
+    _selectedSuggestSubscription = ref.listenManual(
       selectedSuggestNotifierProvider,
       (previous, next) {
         final walkId = ref.read(activeWalkNotifierProvider)?.walkId;
@@ -282,6 +284,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _locationSubscription?.cancel();
     _compassSubscription?.cancel();
     _activeWalkSubscription?.close();
+    _selectedSuggestSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
     _mapMoveController.dispose();
@@ -1080,6 +1083,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           isLoading: _finishLoading,
           backgroundColor: AppColors.danger,
           onPressed: _finishLoading ? null : _finishWalk,
+        ),
+      );
+      actions.add(const SizedBox(height: 8));
+      actions.add(
+        OutlinedButton.icon(
+          icon: const Icon(Icons.chat_bubble_outline),
+          label: const Text('Chat'),
+          onPressed: () => context.router.push(const ChatRoute()),
         ),
       );
     }
