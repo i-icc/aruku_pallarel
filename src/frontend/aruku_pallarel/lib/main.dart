@@ -25,9 +25,18 @@ class MyApp extends HookConsumerWidget {
     final appRouter = useMemoized(AppRouter.new);
 
     return initialization.when(
-      loading: () => const SizedBox.shrink(),
+      loading: () => _buildLoading(theme),
       error: (error, _) => _buildApp(appRouter, theme, ref),
       data: (_) => _buildApp(appRouter, theme, ref),
+    );
+  }
+
+  Widget _buildLoading(ThemeData theme) {
+    return MaterialApp(
+      title: 'Aruku Parallel',
+      themeMode: ThemeMode.light,
+      theme: theme,
+      home: const _InitializationLoadingScreen(),
     );
   }
 
@@ -52,6 +61,33 @@ class MyApp extends HookConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _InitializationLoadingScreen extends StatelessWidget {
+  const _InitializationLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              '準備中...',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
