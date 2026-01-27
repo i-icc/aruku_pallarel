@@ -789,19 +789,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final routePoints = _smoothedRoutePoints.isNotEmpty
         ? _smoothedRoutePoints
         : _routePoints;
-
-    final title = activeWalk == null ? 'No active walk' : 'Live walk';
-    final subtitle = activeWalk == null
-        ? 'Return to Home to start a session.'
-        : 'ID: ${activeWalk.walkId}';
+    final distanceKm = _calculateRouteDistanceKm(routePoints);
+    final elapsedMinutes = _calculateElapsedMinutes(activeWalk);
 
     final notices = _buildNotices(
       spoofState: spoofState,
       trackingState: trackingState,
     );
 
-    final actions = _buildActions(
-      context,
+    final mainButtonState = _resolveMainButtonState(
+      context: context,
       activeWalk: activeWalk,
       spoofEnabled: spoofEnabled,
       trackingState: trackingState,
@@ -837,56 +834,110 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       body: Stack(
         children: [
           Positioned.fill(
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
-              onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
-              onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
-              onPointerCancel: spoofEnabled ? _onSpoofPointerCancel : null,
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: center,
-                  initialZoom: 16,
-                  onPositionChanged: (_, hasGesture) {
-                    if (hasGesture) {
-                      _noteMapGesture();
-                    }
-                  },
-                  onMapReady: () {
-                    _mapReady = true;
-                    _applyInitialCenter();
-                  },
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: mapTheme.urlTemplate,
-                    subdomains: mapTheme.subdomains,
-                    userAgentPackageName: 'com.example.arukuPallarel',
+            child: Container(
+              margin: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                // マップ用: エッジがはっきりした短めの影
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x33000000), // やや強めの影
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                    offset: Offset(0, 4),
                   ),
-                  if (routePoints.length > 1)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: routePoints,
-                          strokeWidth: 4,
-                          color:
-                              const Color(0xFF36FF97).withValues(alpha: 0.7),
-                        ),
-                      ],
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
+                  onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
+                  onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
+                  onPointerCancel: spoofEnabled ? _onSpoofPointerCancel : null,
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: center,
+                      initialZoom: 16,
+                      onPositionChanged: (_, hasGesture) {
+                        if (hasGesture) {
+                          _noteMapGesture();
+                        }
+                      },
+                      onMapReady: () {
+                        _mapReady = true;
+                        _applyInitialCenter();
+                      },
                     ),
-                  MarkerLayer(
-                    markers: [
-                      ...suggestMarkers,
-                      Marker(
-                        point: center,
-                        width: 48,
-                        height: 48,
-                        child: _buildHeadingMarker(
-                          _compassHeading ?? _movementHeading,
+                    children: [
+                      TileLayer(
+                        urlTemplate: mapTheme.urlTemplate,
+                        subdomains: mapTheme.subdomains,
+                        userAgentPackageName: 'com.example.arukuPallarel',
+                      ),
+                      if (routePoints.length > 1)
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: routePoints,
+                              strokeWidth: 4,
+                              color:
+                                  const Color(0xFF36FF97).withValues(alpha: 0.7),
+                            ),
+                          ],
                         ),
+                      MarkerLayer(
+                        markers: [
+                          ...suggestMarkers,
+                          Marker(
+                            point: center,
+                            width: 48,
+                            height: 48,
+                            child: _buildHeadingMarker(
+                              _compassHeading ?? _movementHeading,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 8,
+            child: SafeArea(
+              bottom: false,
+              child: _WalkInfoHeader(
+                distanceKm: distanceKm,
+                elapsedMinutes: elapsedMinutes,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 24,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (notices.isNotEmpty) ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: notices,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  _MainActionButton(
+                    label: mainButtonState.label,
+                    isLoading: mainButtonState.isLoading,
+                    onPressed: mainButtonState.onPressed,
                   ),
                 ],
               ),
@@ -894,15 +945,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           ),
           Positioned(
             left: 16,
-            right: 16,
-            bottom: 16,
+            bottom: 32,
             child: SafeArea(
               top: false,
-              child: _BottomPanel(
-                title: title,
-                subtitle: subtitle,
-                notices: notices,
-                actions: actions,
+              right: false,
+              child: _ChatFloatingButton(
+                onTap: () => context.router.push(const ChatRoute()),
               ),
             ),
           ),
@@ -926,6 +974,49 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   bool _isSamePoint(LatLng a, LatLng b) {
     return (a.latitude - b.latitude).abs() < 0.000001 &&
         (a.longitude - b.longitude).abs() < 0.000001;
+  }
+
+  double? _calculateRouteDistanceKm(List<LatLng> points) {
+    if (points.length < 2) {
+      return null;
+    }
+    const earthRadius = 6371000.0; // meters
+    double totalMeters = 0;
+    for (var i = 0; i < points.length - 1; i++) {
+      final p1 = points[i];
+      final p2 = points[i + 1];
+      final dLat = _degreesToRadians(p2.latitude - p1.latitude);
+      final dLon = _degreesToRadians(p2.longitude - p1.longitude);
+      final lat1Rad = _degreesToRadians(p1.latitude);
+      final lat2Rad = _degreesToRadians(p2.latitude);
+      final a = sin(dLat / 2) * sin(dLat / 2) +
+          cos(lat1Rad) * cos(lat2Rad) * sin(dLon / 2) * sin(dLon / 2);
+      final c = 2 * asin(sqrt(a));
+      totalMeters += earthRadius * c;
+    }
+    if (totalMeters <= 0) {
+      return null;
+    }
+    return totalMeters / 1000.0;
+  }
+
+  double _degreesToRadians(double degrees) => degrees * (pi / 180.0);
+
+  int? _calculateElapsedMinutes(WalkSession? session) {
+    final startedAt = session?.startedAt;
+    if (startedAt == null) {
+      return null;
+    }
+    final start = DateTime.tryParse(startedAt);
+    if (start == null) {
+      return null;
+    }
+    final now = DateTime.now();
+    final diff = now.difference(start);
+    if (diff.isNegative) {
+      return 0;
+    }
+    return diff.inMinutes;
   }
 
   void _recordRoutePoint(
@@ -1062,106 +1153,239 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         .toList();
   }
 
-  List<Widget> _buildActions(
-    BuildContext context, {
+  _MainButtonState _resolveMainButtonState({
+    required BuildContext context,
     required WalkSession? activeWalk,
     required bool spoofEnabled,
     required WalkTrackingState trackingState,
   }) {
-    final actions = <Widget>[];
-
+    // 位置情報がまだ許可されていない場合
     if (!trackingState.permissionGranted && !spoofEnabled) {
-      actions.add(
-        AppPrimaryButton(
-          label: trackingState.isRequesting
-              ? 'Requesting Location'
-              : 'Enable Location',
-          icon: Icons.my_location,
-          isLoading: trackingState.isRequesting,
-          onPressed: trackingState.isRequesting ? null : _startTracking,
-        ),
+      final label = trackingState.isRequesting
+          ? '位置情報をリクエスト中...'
+          : '位置情報を有効にする';
+      return _MainButtonState(
+        label: label,
+        isLoading: trackingState.isRequesting,
+        onPressed: trackingState.isRequesting ? null : _startTracking,
       );
-      actions.add(const SizedBox(height: 8));
-      actions.add(
-        OutlinedButton(
-          onPressed: _openSettings,
-          child: const Text('Open Settings'),
-        ),
-      );
-      return actions;
     }
 
+    // 散歩セッションが存在しない場合
     if (activeWalk == null) {
-      actions.add(
-        AppPrimaryButton(
-          label: 'Back to Home',
-          icon: Icons.home_outlined,
-          onPressed: () => context.router.pop(),
-        ),
-      );
-    } else {
-      actions.add(
-        AppPrimaryButton(
-          label: 'Finish Walk',
-          icon: Icons.stop_circle_outlined,
-          isLoading: _finishLoading,
-          backgroundColor: AppColors.danger,
-          onPressed: _finishLoading ? null : _finishWalk,
-        ),
-      );
-      actions.add(const SizedBox(height: 8));
-      actions.add(
-        OutlinedButton.icon(
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: const Text('Chat'),
-          onPressed: () => context.router.push(const ChatRoute()),
-        ),
+      return _MainButtonState(
+        label: 'ホームに戻る',
+        isLoading: false,
+        onPressed: () => context.router.pop(),
       );
     }
 
-    return actions;
+    // 散歩中の場合
+    return _MainButtonState(
+      label: '散歩を終わる',
+      isLoading: _finishLoading,
+      onPressed: _finishLoading ? null : _finishWalk,
+    );
   }
 }
 
-class _BottomPanel extends StatelessWidget {
-  const _BottomPanel({
-    required this.title,
-    required this.subtitle,
-    required this.notices,
-    required this.actions,
+class _MainButtonState {
+  const _MainButtonState({
+    required this.label,
+    required this.isLoading,
+    required this.onPressed,
   });
 
-  final String title;
-  final String subtitle;
-  final List<Widget> notices;
-  final List<Widget> actions;
+  final String label;
+  final bool isLoading;
+  final VoidCallback? onPressed;
+}
+
+class _WalkInfoHeader extends StatelessWidget {
+  const _WalkInfoHeader({
+    required this.distanceKm,
+    required this.elapsedMinutes,
+  });
+
+  final double? distanceKm;
+  final int? elapsedMinutes;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.medium),
-        border: Border.all(color: AppColors.border),
+    final baseTextStyle = theme.textTheme.titleMedium;
+    final scaledFontSize =
+        (baseTextStyle?.fontSize != null ? baseTextStyle!.fontSize! * 1.2 : 19.0);
+    const iconColor = Colors.grey;
+    final distanceText =
+        distanceKm == null ? '-- km' : '${distanceKm!.toStringAsFixed(1)}km';
+    final minutesText =
+        elapsedMinutes == null ? '--分' : '${elapsedMinutes!.toString()}分';
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: FractionallySizedBox(
+        widthFactor: 0.9, // 横幅を 0.9 倍に
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16), // 縦幅を少しだけ増やす（約 1.1 倍）
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFFFF), // 完全な白
+            borderRadius: BorderRadius.circular(5), // 角丸をさらに控えめに
+            // カード用: エッジが際立つ、短く落ちる影
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x55000000),
+                blurRadius: 10,
+                spreadRadius: 0,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.directions_walk,
+                      color: iconColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      distanceText,
+                      style: baseTextStyle?.copyWith(
+                            fontSize: scaledFontSize,
+                            color: iconColor,
+                            fontWeight: FontWeight.w600,
+                          ) ??
+                          TextStyle(
+                            fontSize: scaledFontSize,
+                            color: iconColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      color: iconColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      minutesText,
+                      style: baseTextStyle?.copyWith(
+                            fontSize: scaledFontSize,
+                            color: iconColor,
+                            fontWeight: FontWeight.w600,
+                          ) ??
+                          TextStyle(
+                            fontSize: scaledFontSize,
+                            color: iconColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: theme.textTheme.titleLarge),
-          const SizedBox(height: 4),
-          Text(subtitle, style: theme.textTheme.bodySmall),
-          if (notices.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...notices,
+    );
+  }
+}
+
+class _MainActionButton extends StatelessWidget {
+  const _MainActionButton({
+    required this.label,
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null && !isLoading;
+    return GestureDetector(
+      onTap: enabled ? onPressed : null,
+      child: Container(
+        height: 64,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF5FFFA2),
+              Color(0xFF36FF97),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x3300C853),
+              blurRadius: 20,
+              offset: Offset(0, 8),
+            ),
           ],
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            ...actions,
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _ChatFloatingButton extends StatelessWidget {
+  const _ChatFloatingButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 10,
+              offset: Offset(0, 6),
+            ),
           ],
-        ],
+        ),
+        child: const Icon(
+          Icons.chat_bubble_outline,
+          color: AppColors.accent,
+          size: 30,
+        ),
       ),
     );
   }
