@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:auto_route/auto_route.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
@@ -240,6 +242,18 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
     final activeWalk = ref.watch(activeWalkNotifierProvider);
     final spoofState = ref.watch(locationSpoofNotifierProvider);
     final theme = Theme.of(context);
+    final serifTitle = GoogleFonts.shipporiMincho(
+      textStyle: theme.textTheme.displayMedium,
+      fontWeight: FontWeight.w600,
+      height: 1.1,
+      color: AppColors.ink,
+    );
+    final serifTagline = GoogleFonts.shipporiMincho(
+      textStyle: theme.textTheme.titleMedium,
+      fontWeight: FontWeight.w600,
+      height: 1.4,
+      color: AppColors.ink,
+    );
 
     final nickname = profile.when(
       data: (value) => value?.nickname ?? 'Guest',
@@ -255,6 +269,8 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
     final locationSubtitle = spoofState.enabled
         ? (spoofState.location == null ? 'Set from map' : 'Pinned on map')
         : 'Tracking on device';
+    final walkHeadline =
+        activeWalk == null ? 'Ready for the next session?' : 'Active walk running';
 
     return Scaffold(
       appBar: AppBar(
@@ -277,31 +293,23 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
                   child: AppReveal(
                     delay: const Duration(milliseconds: 80),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello, $nickname',
-                          style: theme.textTheme.displayMedium,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          activeWalk == null
-                              ? 'Ready for a short walk?'
-                              : 'Your last walk is still active.',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      ],
+                    child: _HeroPanel(
+                      nickname: nickname,
+                      headline: walkHeadline,
+                      locationValue: locationValue,
+                      walkValue: walkValue,
+                      serifTitle: serifTitle,
+                      serifTagline: serifTagline,
                     ),
                   ),
                 ),
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
                   child: AppPrimaryButton(
                     label: activeWalk == null ? 'Start Walk' : 'Continue Walk',
                     icon: activeWalk == null
@@ -322,8 +330,11 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                  child: Text('STATUS', style: theme.textTheme.labelLarge),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: const _SectionHeader(
+                    title: 'STATUS',
+                    caption: 'SYSTEM CHECK',
+                  ),
                 ),
               ),
               SliverPadding(
@@ -339,21 +350,21 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
                           value: nickname,
                           subtitle: 'Signed in',
                         ),
-                        const Divider(height: 1),
+                        const _SlantedDivider(),
                         _StatusRow(
                           icon: Icons.directions_walk,
                           title: 'Walk',
                           value: walkValue,
                           subtitle: walkSubtitle,
                         ),
-                        const Divider(height: 1),
+                        const _SlantedDivider(),
                         _StatusRow(
                           icon: Icons.cloud_outlined,
                           title: 'Firestore',
                           value: _firestoreStatus,
                           subtitle: _loading ? 'Checking...' : 'Pull to refresh',
                         ),
-                        const Divider(height: 1),
+                        const _SlantedDivider(),
                         _StatusRow(
                           icon: Icons.my_location,
                           title: 'Location',
@@ -367,32 +378,271 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                  child: Text('SHORTCUTS', style: theme.textTheme.labelLarge),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                  child: const _SectionHeader(
+                    title: 'SHORTCUTS',
+                    caption: 'QUICK ACCESS',
+                  ),
                 ),
               ),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverToBoxAdapter(
-                      child: AppCard(
-                        padding: EdgeInsets.zero,
-                        child: Column(
-                          children: [
-                            _ShortcutRow(
-                              icon: Icons.map_outlined,
-                              title: 'History',
-                              subtitle: 'Past routes',
-                              onTap: () =>
-                                  context.router.push(const HistoryRoute()),
-                            ),
-                          ],
+                  child: AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        _ShortcutRow(
+                          icon: Icons.map_outlined,
+                          title: 'History',
+                          subtitle: 'Past routes',
+                          onTap: () =>
+                              context.router.push(const HistoryRoute()),
                         ),
-                      ),
+                      ],
                     ),
+                  ),
+                ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroPanel extends StatelessWidget {
+  const _HeroPanel({
+    required this.nickname,
+    required this.headline,
+    required this.locationValue,
+    required this.walkValue,
+    required this.serifTitle,
+    required this.serifTagline,
+  });
+
+  final String nickname;
+  final String headline;
+  final String locationValue;
+  final String walkValue;
+  final TextStyle serifTitle;
+  final TextStyle serifTagline;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadii.small),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('WALK BRIEFING', style: theme.textTheme.labelLarge),
+                  const SizedBox(width: 8),
+                  const _MicroCaption(text: 'ACADEMIC FILE'),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text('Hello, $nickname', style: serifTitle),
+              const SizedBox(height: 6),
+              Text(headline, style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 16),
+              Text('The next page belongs to you.', style: serifTagline),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _InfoChip(label: 'Walk', value: walkValue),
+                  _InfoChip(label: 'Location', value: locationValue),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          top: -12,
+          left: 12,
+          child: _SlantedAccent(
+            width: 140,
+            height: 28,
+            color: AppColors.accent.withValues(alpha: 0.18),
+          ),
+        ),
+        const Positioned(
+          right: 12,
+          bottom: -10,
+          child: _MicroCaption(text: 'PREMIUM PROSPECTUS'),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadii.small),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: theme.textTheme.labelSmall),
+          const SizedBox(height: 4),
+          Text(value, style: theme.textTheme.titleSmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.caption});
+
+  final String title;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(title, style: theme.textTheme.labelLarge),
+            const SizedBox(width: 8),
+            _MicroCaption(text: caption),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const _SlantedLine(),
+      ],
+    );
+  }
+}
+
+class _MicroCaption extends StatelessWidget {
+  const _MicroCaption({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          text,
+          style: theme.textTheme.labelSmall?.copyWith(
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('+', style: theme.textTheme.labelSmall),
+        const SizedBox(width: 4),
+        Text('+', style: theme.textTheme.labelSmall),
+      ],
+    );
+  }
+}
+
+class _SlantedLine extends StatelessWidget {
+  const _SlantedLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 12,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Transform.rotate(
+              angle: -math.pi / 12,
+              child: Container(
+                width: constraints.maxWidth * 0.6,
+                height: 1,
+                color: AppColors.border,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SlantedDivider extends StatelessWidget {
+  const _SlantedDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 16,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Transform.rotate(
+              angle: -math.pi / 12,
+              child: Container(
+                width: constraints.maxWidth,
+                height: 1,
+                color: AppColors.border,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SlantedAccent extends StatelessWidget {
+  const _SlantedAccent({
+    required this.width,
+    required this.height,
+    required this.color,
+  });
+
+  final double width;
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: -math.pi / 12,
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(AppRadii.small),
         ),
       ),
     );

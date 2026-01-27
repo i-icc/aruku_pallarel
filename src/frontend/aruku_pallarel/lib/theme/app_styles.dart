@@ -16,9 +16,9 @@ class AppColors {
 }
 
 class AppRadii {
-  static const double large = 28;
-  static const double medium = 18;
-  static const double small = 12;
+  static const double large = 12;
+  static const double medium = 8;
+  static const double small = 6;
 }
 
 class AppShadows {
