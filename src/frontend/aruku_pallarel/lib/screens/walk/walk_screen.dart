@@ -14,8 +14,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../features/walk/models/walk_session.dart';
+import '../../features/walk/models/walk_suggest.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/location_spoof_provider.dart';
+import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../theme/app_styles.dart';
@@ -24,6 +26,7 @@ import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_primary_button.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+import '../../router/app_router.dart';
 
 @RoutePage()
 class WalkScreen extends ConsumerStatefulWidget {
@@ -51,6 +54,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   StreamSubscription<locus.Location>? _locationSubscription;
   StreamSubscription<CompassEvent>? _compassSubscription;
   ProviderSubscription<WalkSession?>? _activeWalkSubscription;
+  ProviderSubscription<SelectedSuggestState>? _selectedSuggestSubscription;
   final MapController _mapController = MapController();
   late final AnimationController _mapMoveController;
   late final AnimationController _headingPulseController;
@@ -60,6 +64,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   List<LatLng> _smoothedRoutePoints = [];
   final List<LatLng> _routePoints = [];
   String? _routeWalkId;
+  List<WalkSuggest> _latestSuggests = const [];
+  DateTime? _lastMapGestureAt;
+  String? _lastFocusedSuggestId;
   Timer? _spoofTimer;
   Offset? _spoofPressPosition;
   Offset? _spoofStartPosition;
@@ -78,14 +85,35 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+    _selectedSuggestSubscription = ref.listenManual(
+      selectedSuggestNotifierProvider,
+      (previous, next) {
+        final walkId = ref.read(activeWalkNotifierProvider)?.walkId;
+        if (walkId == null || next.walkId != walkId) {
+          return;
+        }
+        final nextId = next.suggestId;
+        if (nextId == null || nextId == previous?.suggestId) {
+          return;
+        }
+        _focusSelectedSuggest(nextId);
+      },
+    );
     _startCompass();
     WidgetsBinding.instance.addObserver(this);
     _activeWalkSubscription = ref.listenManual(
       activeWalkNotifierProvider,
       (previous, next) {
-        if (next == null || previous?.walkId == next.walkId) {
+        if (next == null) {
+          _latestSuggests = const [];
+          _lastFocusedSuggestId = null;
           return;
         }
+        if (previous?.walkId == next.walkId) {
+          return;
+        }
+        _latestSuggests = const [];
+        _lastFocusedSuggestId = null;
         _startTracking();
       },
     );
@@ -256,6 +284,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _locationSubscription?.cancel();
     _compassSubscription?.cancel();
     _activeWalkSubscription?.close();
+    _selectedSuggestSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
     _mapMoveController.dispose();
@@ -313,6 +342,95 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return zoom;
     }
     return fallback;
+  }
+
+  void _noteMapGesture() {
+    _lastMapGestureAt = DateTime.now();
+  }
+
+  bool _shouldAutoFocusSuggest() {
+    if (!_mapReady) {
+      return false;
+    }
+    final lastGesture = _lastMapGestureAt;
+    if (lastGesture == null) {
+      return true;
+    }
+    return DateTime.now().difference(lastGesture) >
+        const Duration(seconds: 2);
+  }
+
+  WalkSuggest? _findSuggestById(String suggestId) {
+    for (final suggest in _latestSuggests) {
+      if (suggest.suggestId == suggestId) {
+        return suggest;
+      }
+    }
+    return null;
+  }
+
+  void _focusSelectedSuggest(String suggestId) {
+    if (_lastFocusedSuggestId == suggestId) {
+      return;
+    }
+    final target = _findSuggestById(suggestId);
+    if (target == null) {
+      return;
+    }
+    if (!_shouldAutoFocusSuggest()) {
+      return;
+    }
+    _animateMapMove(target.position);
+    _lastFocusedSuggestId = suggestId;
+  }
+
+  void _maybeSelectLatestSuggest(String walkId, List<WalkSuggest> suggests) {
+    if (suggests.isEmpty) {
+      return;
+    }
+    final selected = ref.read(selectedSuggestNotifierProvider);
+    if (selected.walkId == walkId && selected.suggestId != null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final current = ref.read(selectedSuggestNotifierProvider);
+      if (current.walkId == walkId && current.suggestId != null) {
+        return;
+      }
+      ref
+          .read(selectedSuggestNotifierProvider.notifier)
+          .select(walkId, suggests.first.suggestId);
+    });
+  }
+
+  List<Marker> _buildSuggestMarkers({
+    required List<WalkSuggest> suggests,
+    required String? walkId,
+    required String? selectedSuggestId,
+  }) {
+    if (walkId == null) {
+      return const [];
+    }
+    return suggests
+        .map(
+          (suggest) => Marker(
+            point: suggest.position,
+            width: 46,
+            height: 46,
+            child: _SuggestPin(
+              isSelected: suggest.suggestId == selectedSuggestId,
+              onTap: () {
+                ref
+                    .read(selectedSuggestNotifierProvider.notifier)
+                    .select(walkId, suggest.suggestId);
+              },
+            ),
+          ),
+        )
+        .toList();
   }
 
   void _startCompass() {
@@ -631,6 +749,13 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final activeWalk = ref.watch(activeWalkNotifierProvider);
     final trackingState = ref.watch(walkTrackingNotifierProvider);
     final spoofState = ref.watch(locationSpoofNotifierProvider);
+    final walkId = activeWalk?.walkId;
+    final suggestsAsync = walkId == null
+        ? const AsyncValue.data(<WalkSuggest>[])
+        : ref.watch(walkSuggestListProvider(walkId));
+    final selectedSuggestState = ref.watch(selectedSuggestNotifierProvider);
+    final selectedSuggestId =
+        selectedSuggestState.walkId == walkId ? selectedSuggestState.suggestId : null;
     final mapThemeId = ref.watch(mapThemeNotifierProvider);
     final mapTheme = mapThemeId.theme;
     final spoofEnabled = spoofState.enabled;
@@ -659,6 +784,32 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       trackingState: trackingState,
     );
 
+    final suggestMarkers = suggestsAsync.when(
+      data: (suggests) {
+        _latestSuggests = suggests;
+        if (walkId != null) {
+          _maybeSelectLatestSuggest(walkId, suggests);
+        }
+        if (selectedSuggestId != null &&
+            _lastFocusedSuggestId != selectedSuggestId &&
+            _findSuggestById(selectedSuggestId) != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            _focusSelectedSuggest(selectedSuggestId);
+          });
+        }
+        return _buildSuggestMarkers(
+          suggests: suggests,
+          walkId: walkId,
+          selectedSuggestId: selectedSuggestId,
+        );
+      },
+      loading: () => const <Marker>[],
+      error: (error, stackTrace) => const <Marker>[],
+    );
+
     return Scaffold(
       body: Stack(
         children: [
@@ -674,6 +825,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                 options: MapOptions(
                   initialCenter: center,
                   initialZoom: 16,
+                  onPositionChanged: (_, hasGesture) {
+                    if (hasGesture) {
+                      _noteMapGesture();
+                    }
+                  },
                   onMapReady: () {
                     _mapReady = true;
                     _applyInitialCenter();
@@ -697,6 +853,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                     ),
                   MarkerLayer(
                     markers: [
+                      ...suggestMarkers,
                       Marker(
                         point: center,
                         width: 48,
@@ -928,6 +1085,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           onPressed: _finishLoading ? null : _finishWalk,
         ),
       );
+      actions.add(const SizedBox(height: 8));
+      actions.add(
+        OutlinedButton.icon(
+          icon: const Icon(Icons.chat_bubble_outline),
+          label: const Text('Chat'),
+          onPressed: () => context.router.push(const ChatRoute()),
+        ),
+      );
     }
 
     return actions;
@@ -1002,6 +1167,58 @@ class _Notice extends StatelessWidget {
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: color,
             ),
+      ),
+    );
+  }
+}
+
+class _SuggestPin extends StatelessWidget {
+  const _SuggestPin({
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final pinColor = isSelected ? AppColors.accentWarm : AppColors.accent;
+    final ringColor = isSelected
+        ? AppColors.accentWarm.withValues(alpha: 0.2)
+        : Colors.transparent;
+    return GestureDetector(
+      onTap: onTap,
+      child: Center(
+        child: AnimatedScale(
+          scale: isSelected ? 1.0 : 0.88,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: pinColor,
+              boxShadow: isSelected ? AppShadows.tight : AppShadows.soft,
+            ),
+            child: Container(
+              margin: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: pinColor, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: ringColor,
+                    blurRadius: 10,
+                    spreadRadius: 6,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

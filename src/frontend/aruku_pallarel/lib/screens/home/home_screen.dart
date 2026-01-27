@@ -374,28 +374,21 @@ class _HomeScreenBodyState extends ConsumerState<_HomeScreenBody> {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverToBoxAdapter(
-                  child: AppCard(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      children: [
-                        _ShortcutRow(
-                          icon: Icons.map_outlined,
-                          title: 'History',
-                          subtitle: 'Past routes',
-                          onTap: () =>
-                              context.router.push(const HistoryRoute()),
+                      child: AppCard(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            _ShortcutRow(
+                              icon: Icons.map_outlined,
+                              title: 'History',
+                              subtitle: 'Past routes',
+                              onTap: () =>
+                                  context.router.push(const HistoryRoute()),
+                            ),
+                          ],
                         ),
-                        const Divider(height: 1),
-                        _ShortcutRow(
-                          icon: Icons.chat_bubble_outline,
-                          title: 'Chat',
-                          subtitle: 'Ask the guide',
-                          onTap: () => context.router.push(const ChatRoute()),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],

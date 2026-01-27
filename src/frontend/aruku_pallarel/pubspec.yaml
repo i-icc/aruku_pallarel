@@ -52,6 +52,7 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_compass: ^0.8.0
   google_fonts: ^7.1.0
+  any_link_preview: ^3.0.0
 
 dev_dependencies:
   flutter_test:
