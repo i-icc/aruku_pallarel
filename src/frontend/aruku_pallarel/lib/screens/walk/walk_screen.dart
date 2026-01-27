@@ -71,6 +71,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   Offset? _spoofPressPosition;
   Offset? _spoofStartPosition;
   int? _spoofPointerId;
+  Timer? _elapsedTimer;
 
   @override
   void initState() {
@@ -115,6 +116,15 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         _latestSuggests = const [];
         _lastFocusedSuggestId = null;
         _startTracking();
+      },
+    );
+    _elapsedTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {});
       },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -287,6 +297,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _selectedSuggestSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
+    _elapsedTimer?.cancel();
     _mapMoveController.dispose();
     _headingPulseController.dispose();
     super.dispose();
@@ -934,10 +945,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                     ),
                     const SizedBox(height: 8),
                   ],
-                  _MainActionButton(
-                    label: mainButtonState.label,
-                    isLoading: mainButtonState.isLoading,
-                    onPressed: mainButtonState.onPressed,
+                  Align(
+                    alignment: Alignment.center,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.6,
+                      child: _MainActionButton(
+                        label: mainButtonState.label,
+                        isLoading: mainButtonState.isLoading,
+                        onPressed: mainButtonState.onPressed,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -960,7 +977,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             child: SafeArea(
               left: false,
               bottom: false,
-              minimum: const EdgeInsets.only(top: 8, right: 8),
+              minimum: const EdgeInsets.only(top: 1, right: 1),
               child: MapInfoButton(
                 onTap: () => showMapAttributionSheet(context, mapThemeId),
               ),
@@ -1318,41 +1335,54 @@ class _MainActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? onPressed : null,
       child: Container(
-        height: 64,
+        height: 56,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
             colors: [
-              Color(0xFF5FFFA2),
-              Color(0xFF36FF97),
+              Color(0xFFDFFF33),
+              Color(0xFF3FFF8B),
+              Color(0xFF22FFD9),
             ],
+            stops: [0.0, 0.5, 1.0],
           ),
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(28),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x3300C853),
-              blurRadius: 20,
-              offset: Offset(0, 8),
+              color: Color(0x55000000),
+              blurRadius: 10,
+              spreadRadius: 0,
+              offset: Offset(0, 1),
             ),
           ],
         ),
-        child: isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        child: Container(
+          margin: const EdgeInsets.all(3), // 内側 3px に白をかぶせる
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(25),
+            color: Colors.white.withOpacity(0.3),
+          ),
+          alignment: Alignment.center,
+          child: isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              )
-            : Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+        ),
       ),
     );
   }
@@ -1368,16 +1398,17 @@ class _ChatFloatingButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 64,
-        height: 64,
+        width: 56,
+        height: 56,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(32),
+          color: Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(28),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x1A000000),
+              color: Color(0x55000000),
               blurRadius: 10,
-              offset: Offset(0, 6),
+              spreadRadius: 0,
+              offset: Offset(0, 1),
             ),
           ],
         ),
