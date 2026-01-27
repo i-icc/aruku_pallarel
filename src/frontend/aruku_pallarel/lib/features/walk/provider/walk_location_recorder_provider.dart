@@ -11,6 +11,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'location_spoof_provider.dart';
 import '../infrastructure/walk_api.dart';
 import '../../share/services/backend_exception.dart';
+import '../services/location_sync_context.dart';
 
 part 'walk_location_recorder_provider.g.dart';
 
@@ -98,8 +99,12 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     _userId = user.uid;
     _resetSuggestionState();
     _lastRecordedAt = null;
+    await saveWalkSyncContext(userId: user.uid, walkId: walkId);
     await _loadLatestBatch(user.uid, walkId);
     state = state.copyWith(isRecording: true, errorMessage: null);
+    try {
+      await locus.Locus.dataSync.resume();
+    } catch (_) {}
 
     _subscription = locus.Locus.location.stream.listen(
       (location) {
@@ -147,13 +152,18 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       } else {
         await _flushBuffer();
       }
+      await syncStoredLocations();
     }
+    try {
+      await locus.Locus.dataSync.pause();
+    } catch (_) {}
     _buffer.clear();
     _resetBatchState();
     _resetSuggestionState();
     _walkId = null;
     _userId = null;
     _lastRecordedAt = null;
+    await clearWalkSyncContext();
     state = state.copyWith(isRecording: false, bufferCount: 0);
   }
 
@@ -260,6 +270,9 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       data['createdAt'] = firestore.FieldValue.serverTimestamp();
     }
     await batchRef.set(data, firestore.SetOptions(merge: true));
+    if (points.isNotEmpty) {
+      await updateLastSyncedAt(points.last.timestamp);
+    }
     return true;
   }
 

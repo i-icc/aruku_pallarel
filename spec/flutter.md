@@ -12,6 +12,7 @@
 
 ## 開発ルール
 - Flutter/Dart のコマンドは必ず `fvm` 経由で実行する
+- 対応プラットフォームは iOS のみ
 
 ## ディレクトリ構造
 ```
@@ -74,6 +75,13 @@ dart run build_runner build --delete-conflicting-outputs
 4. 認証トークン確認
 5. FCM 初期化
 6. FlutterNativeSplash.remove()
+
+## バックグラウンド位置同期（iOS）
+- Locus の Headless Execution を前提にする
+- `Locus.registerHeadlessSyncBodyBuilder()` で同期ペイロードを構築する（トップレベル関数 + `@pragma('vm:entry-point')`）
+- ヘッドレス同期は永続ストレージに保存した `userId`/`walkId` を付与して Backend に送信する
+- Firestore 直接書き込みはフォアグラウンドのみとし、ヘッドレスでは Backend 経由で保存する
+- 同期ポリシーは `Locus.setSyncPolicy()` を使って iOS の電池/ネットワーク条件に合わせて調整する
 
 ---
 

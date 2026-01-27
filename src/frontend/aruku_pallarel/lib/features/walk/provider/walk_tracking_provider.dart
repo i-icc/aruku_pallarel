@@ -1,6 +1,12 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:locus/locus.dart' as locus;
 import 'package:permission_handler/permission_handler.dart' as permission;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../../../env/env.dart';
+import '../services/location_sync_context.dart';
 
 part 'walk_tracking_provider.g.dart';
 
@@ -63,10 +69,17 @@ class WalkTrackingState {
 @Riverpod(keepAlive: true)
 class WalkTrackingNotifier extends _$WalkTrackingNotifier {
   static const double _distanceFilterMeters = 15;
+  static const int _syncBatchSize = 64;
+  static const int _syncThreshold = 10;
   bool _ready = false;
 
+  StreamSubscription<User?>? _authSub;
+
   @override
-  WalkTrackingState build() => const WalkTrackingState();
+  WalkTrackingState build() {
+    ref.onDispose(_dispose);
+    return const WalkTrackingState();
+  }
 
   Future<bool> startTracking() async {
     if (state.isTracking) {
@@ -91,8 +104,13 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         await locus.Locus.ready(
           locus.ConfigPresets.balanced.copyWith(
             distanceFilter: _distanceFilterMeters,
-            autoSync: false,
-            batchSync: false,
+            url: '${Env.backendBaseUrl}/v1/locations:sync',
+            method: 'POST',
+            autoSync: true,
+            batchSync: true,
+            maxBatchSize: _syncBatchSize,
+            autoSyncThreshold: _syncThreshold,
+            httpTimeout: 20,
             stopOnTerminate: false,
             enableHeadless: true,
             persistMode: locus.PersistMode.location,
@@ -104,6 +122,29 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
             ),
           ),
         );
+        await locus.Locus.dataSync
+            .setSyncBodyBuilder(buildForegroundLocationSyncBody);
+        locus.Locus.setHeadersCallback(() async {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user == null) {
+            return {};
+          }
+          try {
+            final token = await user.getIdToken();
+            if (token == null || token.isEmpty) {
+              return {};
+            }
+            return {'Authorization': 'Bearer $token'};
+          } catch (_) {
+            return {};
+          }
+        });
+        await locus.Locus.refreshHeaders();
+        _authSub ??= FirebaseAuth.instance.idTokenChanges().listen((_) async {
+          try {
+            await locus.Locus.refreshHeaders();
+          } catch (_) {}
+        });
         _ready = true;
       }
 
@@ -194,5 +235,9 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         locationText: null,
       );
     }
+  }
+
+  void _dispose() {
+    _authSub?.cancel();
   }
 }

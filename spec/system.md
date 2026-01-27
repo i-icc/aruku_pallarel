@@ -70,9 +70,15 @@ flowchart TB
 3. Backend → Firestore: walk ドキュメント作成
 4. Backend → App: walkId 返却
 
-### 位置更新
+### 位置更新（フォアグラウンド）
 1. App は Locus の位置更新ストリームを購読する（distanceFilter: 15m）
 2. 位置が更新されたときのみ Firestore の `locations` に追記
+
+### バックグラウンド/終了時の位置同期（iOSのみ）
+1. Locus の Headless Execution を有効化する
+2. Locus の HTTP 同期で Backend に位置更新を送信する
+3. Headless 同期時は `Locus.registerHeadlessSyncBodyBuilder()` で永続ストレージの walk 情報を付与する
+4. Backend が受信した位置情報を Firestore の `locations` に保存する
 
 ### 履歴/提案の閲覧
 1. App は Firestore から `walks` / `suggests` / `chat` を読み取る

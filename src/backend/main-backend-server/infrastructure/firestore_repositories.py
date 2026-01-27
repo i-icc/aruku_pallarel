@@ -93,6 +93,126 @@ class FirestoreWalkRepository:
             merge=True,
         )
 
+    def append_location_points(self, user_id, walk_id, points):
+        if not points:
+            return 0
+        locations_ref = (
+            self._walks_ref(user_id).document(walk_id).collection("locations")
+        )
+        existing_batches = {}
+        for snapshot in locations_ref.stream():
+            data = snapshot.to_dict() or {}
+            index = data.get("index")
+            if not isinstance(index, int):
+                try:
+                    index = int(snapshot.id)
+                except (TypeError, ValueError):
+                    continue
+            existing_batches[index] = {
+                "ref": snapshot.reference,
+                "points": list(data.get("points") or []),
+            }
+
+        max_batch_size = 64
+        if existing_batches:
+            current_index = max(existing_batches.keys())
+            current_batch = existing_batches[current_index]
+            current_points = current_batch["points"]
+            current_ref = current_batch["ref"]
+            is_new_batch = False
+        else:
+            current_index = 1
+            current_points = []
+            current_ref = locations_ref.document(str(current_index))
+            is_new_batch = True
+
+        def _extract_geo(geo):
+            if hasattr(geo, "latitude") and hasattr(geo, "longitude"):
+                return geo.latitude, geo.longitude
+            if isinstance(geo, dict):
+                lat = geo.get("lat", geo.get("latitude"))
+                lon = geo.get("lon", geo.get("longitude"))
+                if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+                    return float(lat), float(lon)
+            return None, None
+
+        def _extract_timestamp(value):
+            if value is None:
+                return None
+            if hasattr(value, "tzinfo"):
+                return ensure_utc(value)
+            return None
+
+        def _point_key(point):
+            timestamp = _extract_timestamp(point.get("timestamp"))
+            geo = point.get("geo")
+            lat, lon = _extract_geo(geo)
+            if timestamp is None or lat is None or lon is None:
+                return None
+            return (timestamp.isoformat(), lat, lon)
+
+        def _sort_points(points_list):
+            def _key(item):
+                ts = _extract_timestamp(item.get("timestamp"))
+                if ts is None:
+                    return datetime.min.replace(tzinfo=timezone.utc)
+                return ts
+
+            points_list.sort(key=_key)
+
+        added = 0
+        existing_keys = {
+            key for key in (_point_key(point) for point in current_points) if key
+        }
+
+        for point in points:
+            if len(current_points) >= max_batch_size:
+                _sort_points(current_points)
+                payload = {
+                    "index": current_index,
+                    "count": len(current_points),
+                    "points": current_points,
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                }
+                if is_new_batch:
+                    payload["createdAt"] = firestore.SERVER_TIMESTAMP
+                current_ref.set(payload, merge=True)
+
+                current_index += 1
+                current_points = []
+                current_ref = locations_ref.document(str(current_index))
+                is_new_batch = True
+                existing_keys = set()
+
+            entry = {
+                "timestamp": ensure_utc(point.timestamp),
+                "geo": firestore.GeoPoint(point.lat, point.lon),
+            }
+            key = (
+                entry["timestamp"].isoformat(),
+                entry["geo"].latitude,
+                entry["geo"].longitude,
+            )
+            if key in existing_keys:
+                continue
+            current_points.append(entry)
+            existing_keys.add(key)
+            added += 1
+
+        if current_points or is_new_batch:
+            _sort_points(current_points)
+            payload = {
+                "index": current_index,
+                "count": len(current_points),
+                "points": current_points,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }
+            if is_new_batch:
+                payload["createdAt"] = firestore.SERVER_TIMESTAMP
+            current_ref.set(payload, merge=True)
+
+        return added
+
     def get_location_points(self, user_id, walk_id):
         locations_ref = (
             self._walks_ref(user_id).document(walk_id).collection("locations")

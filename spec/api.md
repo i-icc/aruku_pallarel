@@ -7,7 +7,8 @@
 - Content-Type: `application/json`
 - 失敗時は `{ "error": { "code": "...", "message": "..." } }` を返す
 
-> 位置情報の書き込みや履歴の読み取りはクライアントから Firestore へ直接行う（MVP）。
+> 位置情報の書き込みはフォアグラウンドではクライアントから Firestore へ直接行う（MVP）。
+> バックグラウンド/終了時は Locus の HTTP 同期で Backend 経由で保存する（iOSのみ）。
 
 ---
 
@@ -136,6 +137,37 @@
 ```
 
 `result: ng` の場合は理由は返さず、ログのみ残す。
+
+---
+
+## Location Sync（iOSバックグラウンド）
+
+### POST /v1/locations:sync
+バックグラウンド/終了時の位置同期。Locus の HTTP 同期が呼び出す。
+
+#### 認証
+- `Authorization: Bearer <Firebase ID Token>`
+- ヘッドレスでトークン取得できない場合は、ローカルに保持してフォアグラウンド復帰時の同期で吸収する
+
+#### Request
+```json
+{
+  "userId": "firebase-uid-xxx",
+  "walkId": "01JABCDEFG...",
+  "locations": [
+    { "timestamp": "2025-01-03T09:00:00Z", "lat": 35.0, "lon": 139.0 }
+  ]
+}
+```
+
+> `locations` は `Locus.registerHeadlessSyncBodyBuilder()` で生成する。必要に応じて Locus の location JSON をそのまま送る。
+
+#### Response
+```json
+{
+  "result": "ok"
+}
+```
 
 #### 判定条件
 - 前回の `result: ok` リクエストから 5 分未満なら `ng`（設定値 / 初期値: 5分）

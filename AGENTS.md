@@ -26,3 +26,4 @@
 - Firebase Auth のサインイン方式は Terraform で管理する
 - Firestore のルール/インデックスは Terraform で管理する
 - バグ修正時は `tasks/` にチケットを起票してから対応する
+- 対応プラットフォームは iOS のみを前提にする（Android は考慮しない）

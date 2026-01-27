@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 from api.internal import internal_api
+from api.locations import locations_api
 from api.jobs import jobs_api
 from api.users import users_api
 from api.walks import walks_api
@@ -108,6 +109,7 @@ def log_response(response):
 
 app.register_blueprint(users_api)
 app.register_blueprint(walks_api)
+app.register_blueprint(locations_api)
 app.register_blueprint(internal_api)
 if _is_truthy(ENABLE_JOB_ENDPOINTS):
     app.register_blueprint(jobs_api)
