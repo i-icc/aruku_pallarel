@@ -24,6 +24,8 @@ import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_primary_button.dart';
+import '../../widgets/app_gradient_pill_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
 import '../../router/app_router.dart';
@@ -72,6 +74,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   Offset? _spoofStartPosition;
   int? _spoofPointerId;
   Timer? _elapsedTimer;
+  bool _showFinishConfirm = false;
 
   @override
   void initState() {
@@ -949,7 +952,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                     alignment: Alignment.center,
                     child: FractionallySizedBox(
                       widthFactor: 0.55,
-                      child: _MainActionButton(
+                      child: AppGradientPillButton(
                         label: mainButtonState.label,
                         isLoading: mainButtonState.isLoading,
                         onPressed: mainButtonState.onPressed,
@@ -983,6 +986,42 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
               ),
             ),
           ),
+          if (_showFinishConfirm) ...[
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _showFinishConfirm = false;
+                  });
+                },
+                child: Container(
+                  color: Colors.black.withOpacity(0.45),
+                ),
+              ),
+            ),
+            Center(
+              child: SafeArea(
+                child: AppConfirmDialog(
+                  title: '散歩を終わりますか？',
+                  description: '※歩きスマホにご注意ください',
+                  confirmLabel: 'おわる',
+                  cancelLabel: 'もどる',
+                  onCancel: () {
+                    setState(() {
+                      _showFinishConfirm = false;
+                    });
+                  },
+                  onConfirm: () {
+                    setState(() {
+                      _showFinishConfirm = false;
+                    });
+                    _finishWalk();
+                  },
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1201,7 +1240,13 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     return _MainButtonState(
       label: '散歩を終わる',
       isLoading: _finishLoading,
-      onPressed: _finishLoading ? null : _finishWalk,
+      onPressed: _finishLoading
+          ? null
+          : () {
+              setState(() {
+                _showFinishConfirm = true;
+              });
+            },
     );
   }
 }
@@ -1312,90 +1357,6 @@ class _WalkInfoHeader extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MainActionButton extends StatelessWidget {
-  const _MainActionButton({
-    required this.label,
-    required this.isLoading,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool isLoading;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onPressed != null && !isLoading;
-    const baseColors = [
-      Color(0xFFDFFF33),
-      Color(0xFF3FFF8B),
-      Color(0xFF22FFD9),
-    ];
-    // 外側は内側のグラデを少し白に寄せた色にして、「白がかかった縁」に近づける
-    final outerColors = baseColors
-        .map(
-          (color) => Color.lerp(color, Colors.white, 0.72)!, // さらに白寄りに
-        )
-        .toList();
-    return GestureDetector(
-      onTap: enabled ? onPressed : null,
-      child: Container(
-        height: 68, // 既存より約 1.2 倍の縦幅
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          // 外側: グラデに白がかかった縁＋影
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: outerColors,
-            stops: const [0.0, 0.5, 1.0],
-          ),
-          borderRadius: BorderRadius.circular(34),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x55000000),
-              blurRadius: 10,
-              spreadRadius: 0,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Container(
-          // 内側 3px 分を色のコアにする
-          margin: const EdgeInsets.all(6),
-          decoration: const BoxDecoration(
-            borderRadius: BorderRadius.all(Radius.circular(30)),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: baseColors,
-              stops: [0.0, 0.5, 1.0],
-            ),
-          ),
-          alignment: Alignment.center,
-          child: isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
         ),
       ),
     );
