@@ -9,7 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
-import 'package:url_launcher/url_launcher.dart';
+
 
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../features/share/services/backend_exception.dart';
@@ -23,9 +23,10 @@ import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
-import '../../widgets/app_primary_button.dart';
+
 import '../../widgets/app_gradient_pill_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_floating_button.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
 import '../../router/app_router.dart';
@@ -608,7 +609,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                     color: Colors.transparent,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.24),
+                        color: Colors.black.withValues(alpha: 0.24),
                         blurRadius: 18,
                         spreadRadius: 1,
                         offset: const Offset(0, 4),
@@ -769,17 +770,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _animateMapMove(latLng);
   }
 
-  Future<void> _openSettings() async {
-    final uri = Uri.parse('app-settings:');
-    if (!await launchUrl(uri)) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open settings.')),
-      );
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -969,7 +960,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             child: SafeArea(
               top: false,
               right: false,
-              child: _ChatFloatingButton(
+              child: AppFloatingButton(
+                icon: Icons.chat,
                 onTap: () => context.router.push(const ChatRoute()),
               ),
             ),
@@ -996,7 +988,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                   });
                 },
                 child: Container(
-                  color: Colors.black.withOpacity(0.45),
+                  color: Colors.black.withValues(alpha: 0.45),
                 ),
               ),
             ),
@@ -1363,39 +1355,7 @@ class _WalkInfoHeader extends StatelessWidget {
   }
 }
 
-class _ChatFloatingButton extends StatelessWidget {
-  const _ChatFloatingButton({required this.onTap});
 
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x55000000),
-              blurRadius: 10,
-              spreadRadius: 0,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.chat, // 塗りつぶしアイコン
-          color: Colors.grey, // 上部カードと同系色
-          size: 32,
-        ),
-      ),
-    );
-  }
-}
 
 class _Notice extends StatelessWidget {
   const _Notice({
