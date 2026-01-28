@@ -2,7 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/widgets.dart';
 
 import '../screens/authentication/login_screen.dart';
-import '../screens/base.dart';
+
 import '../screens/chat/chat_screen.dart';
 import '../screens/history/history_detail_screen.dart';
 import '../screens/history/history_screen.dart';
@@ -18,17 +18,23 @@ class AppRouter extends RootStackRouter {
   @override
   List<AutoRoute> get routes => [
         AutoRoute(
-          page: BaseRoute.page,
+          page: HomeRoute.page,
           initial: true,
+          path: '/',
           guards: [AuthGuard()],
-          children: [
-            AutoRoute(page: HomeRoute.page, path: 'home', initial: true),
-            AutoRoute(page: SettingsRoute.page, path: 'settings'),
-          ],
+        ),
+        AutoRoute(
+          page: SettingsRoute.page,
+          path: '/settings',
+          guards: [AuthGuard()],
         ),
         AutoRoute(page: LoginRoute.page, path: '/login'),
         AutoRoute(page: WalkRoute.page, path: '/walk', guards: [AuthGuard()]),
-        AutoRoute(page: HistoryRoute.page, path: '/history', guards: [AuthGuard()]),
+        AutoRoute(
+          page: HistoryRoute.page,
+          path: '/history',
+          guards: [AuthGuard()],
+        ),
         AutoRoute(
           page: HistoryDetailRoute.page,
           path: '/history/:walkId',
