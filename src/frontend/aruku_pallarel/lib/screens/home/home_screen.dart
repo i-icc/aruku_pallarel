@@ -18,6 +18,7 @@ import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_gradient_pill_button.dart';
 import '../../widgets/app_floating_button.dart';
 import '../../widgets/app_location_marker.dart';
+import '../../widgets/settings_sheet.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
 
@@ -275,7 +276,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     // Settings Button
                     AppFloatingButton(
                       icon: Icons.settings,
-                      onTap: () => context.router.push(const SettingsRoute()),
+                      onTap: () {
+                         showModalBottomSheet(
+                           context: context,
+                           isScrollControlled: true,
+                           backgroundColor: Colors.transparent,
+                           builder: (_) => const SettingsSheet(),
+                         );
+                      },
                     ),
                   ],
                 ),

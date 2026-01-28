@@ -7,7 +7,7 @@ import '../screens/chat/chat_screen.dart';
 import '../screens/history/history_detail_screen.dart';
 import '../screens/history/history_screen.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/settings/settings_screen.dart';
+
 import '../screens/walk/walk_screen.dart';
 import 'auth_guard.dart';
 
@@ -23,11 +23,7 @@ class AppRouter extends RootStackRouter {
           path: '/',
           guards: [AuthGuard()],
         ),
-        AutoRoute(
-          page: SettingsRoute.page,
-          path: '/settings',
-          guards: [AuthGuard()],
-        ),
+
         AutoRoute(page: LoginRoute.page, path: '/login'),
         AutoRoute(page: WalkRoute.page, path: '/walk', guards: [AuthGuard()]),
         AutoRoute(
