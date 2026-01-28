@@ -12,11 +12,12 @@ import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../router/app_router.dart';
-import '../../theme/app_styles.dart';
+
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_gradient_pill_button.dart';
 import '../../widgets/app_floating_button.dart';
+import '../../widgets/app_location_marker.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
 
@@ -215,16 +216,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         markers: [
                           Marker(
                             point: _currentCenter!,
-                            width: 24,
-                            height: 24,
-                            child: Container(
-                                decoration: BoxDecoration(
-                                    color: AppColors.accent,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 3),
-                                    boxShadow: AppShadows.soft,
-                                ),
-                            ),
+                            width: 48,
+                            height: 48,
+                            child: const AppLocationMarker(),
                           ),
                         ],
                       ),
