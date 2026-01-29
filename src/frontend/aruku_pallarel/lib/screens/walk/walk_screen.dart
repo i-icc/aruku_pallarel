@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' as ui;
+
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_compass/flutter_compass.dart';
@@ -24,13 +24,20 @@ import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
 
-import '../../widgets/app_gradient_pill_button.dart';
+
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_floating_button.dart';
-import '../../widgets/app_location_marker.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+
 import '../../router/app_router.dart';
+import '../../features/walk/utils/map_utils.dart';
+import '../../features/walk/utils/route_smoother.dart';
+import 'widgets/walk_info_header.dart';
+import 'widgets/walk_notice.dart';
+import 'widgets/walk_suggest_pin.dart';
+import 'widgets/walk_map_layer.dart';
+import 'widgets/walk_bottom_overlay.dart';
 
 @RoutePage()
 class WalkScreen extends ConsumerStatefulWidget {
@@ -46,8 +53,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   static const Duration _spoofHoldDuration = Duration(seconds: 2);
   static const double _spoofMoveThreshold = 12;
   static const Duration _mapMoveDuration = Duration(milliseconds: 600);
-  static const int _routeSplineSteps = 8;
-  static const double _routeSplineAlpha = 0.5;
+
 
   bool _finishLoading = false;
   String? _locationError;
@@ -431,7 +437,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             point: suggest.position,
             width: 46,
             height: 46,
-            child: _SuggestPin(
+            child: WalkSuggestPin(
               isSelected: suggest.suggestId == selectedSuggestId,
               onTap: () {
                 ref
@@ -478,93 +484,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     return normalized;
   }
 
-  double _catmullT(double t, LatLng p0, LatLng p1) {
-    final dx = p1.latitude - p0.latitude;
-    final dy = p1.longitude - p0.longitude;
-    final dist = sqrt(dx * dx + dy * dy);
-    if (dist == 0) {
-      return t + 0.000001;
-    }
-    return t + pow(dist, _routeSplineAlpha).toDouble();
-  }
 
-  LatLng _interpolateLatLng(
-    LatLng start,
-    LatLng end,
-    double t0,
-    double t1,
-    double t,
-  ) {
-    final span = t1 - t0;
-    if (span.abs() < 0.000001) {
-      return start;
-    }
-    return _lerpLatLng(start, end, (t - t0) / span);
-  }
 
-  LatLng _catmullRomPoint(
-    LatLng p0,
-    LatLng p1,
-    LatLng p2,
-    LatLng p3,
-    double t0,
-    double t1,
-    double t2,
-    double t3,
-    double t,
-  ) {
-    final a1 = _interpolateLatLng(p0, p1, t0, t1, t);
-    final a2 = _interpolateLatLng(p1, p2, t1, t2, t);
-    final a3 = _interpolateLatLng(p2, p3, t2, t3, t);
-    final b1 = _interpolateLatLng(a1, a2, t0, t2, t);
-    final b2 = _interpolateLatLng(a2, a3, t1, t3, t);
-    return _interpolateLatLng(b1, b2, t1, t2, t);
-  }
 
-  List<LatLng> _catmullRomSegment(
-    LatLng p0,
-    LatLng p1,
-    LatLng p2,
-    LatLng p3,
-  ) {
-    final t0 = 0.0;
-    final t1 = _catmullT(t0, p0, p1);
-    final t2 = _catmullT(t1, p1, p2);
-    final t3 = _catmullT(t2, p2, p3);
-    final segment = <LatLng>[];
-    for (var i = 0; i <= _routeSplineSteps; i++) {
-      final t = ui.lerpDouble(t1, t2, i / _routeSplineSteps) ?? t1;
-      segment.add(_catmullRomPoint(p0, p1, p2, p3, t0, t1, t2, t3, t));
-    }
-    return segment;
-  }
-
-  List<LatLng> _smoothRoutePoints(List<LatLng> points) {
-    if (points.length < 2) {
-      return List<LatLng>.from(points);
-    }
-    final smoothed = <LatLng>[];
-    for (var i = 0; i < points.length - 1; i++) {
-      final p0 = i == 0 ? points[i] : points[i - 1];
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final p3 = i + 2 < points.length ? points[i + 2] : points[i + 1];
-      final segment = _catmullRomSegment(p0, p1, p2, p3);
-      if (smoothed.isNotEmpty && segment.isNotEmpty) {
-        segment.removeAt(0);
-      }
-      smoothed.addAll(segment);
-    }
-    return smoothed;
-  }
-
-  LatLng _lerpLatLng(LatLng start, LatLng target, double t) {
-    final lat =
-        ui.lerpDouble(start.latitude, target.latitude, t) ?? target.latitude;
-    final lng =
-        ui.lerpDouble(start.longitude, target.longitude, t) ?? target.longitude;
-    return LatLng(lat, lng);
-  }
 
   LatLng _resolveAnimatedCenter(LatLng center) {
     final start = _mapMoveStart;
@@ -572,21 +494,19 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     if (start == null || target == null) {
       return center;
     }
-    if (!_isSamePoint(target, center)) {
+    if (!MapUtils.isSamePoint(target, center)) {
       return center;
     }
     final t = Curves.easeInOutCubic.transform(_mapMoveController.value);
-    return _lerpLatLng(start, target, t);
+    return RouteSmoother.lerpLatLng(start, target, t);
   }
-
-
 
   void _handleMapMoveTick() {
     if (!_mapReady || _mapMoveStart == null || _mapMoveTarget == null) {
       return;
     }
     final t = Curves.easeInOutCubic.transform(_mapMoveController.value);
-    final position = _lerpLatLng(_mapMoveStart!, _mapMoveTarget!, t);
+    final position = RouteSmoother.lerpLatLng(_mapMoveStart!, _mapMoveTarget!, t);
     final targetZoom = _mapMoveZoom ?? _safeZoom();
     _mapController.move(position, targetZoom);
   }
@@ -604,7 +524,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _mapMoveStart = start;
     _mapMoveTarget = target;
     _mapMoveZoom = targetZoom;
-    if (_isSamePoint(start, target)) {
+    if (MapUtils.isSamePoint(start, target)) {
       _mapMoveController.value = 1.0;
       _mapController.move(target, targetZoom);
       return;
@@ -712,7 +632,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final routePoints = _smoothedRoutePoints.isNotEmpty
         ? _smoothedRoutePoints
         : _routePoints;
-    final distanceKm = _calculateRouteDistanceKm(routePoints);
+    final distanceKm = MapUtils.calculateRouteDistanceKm(routePoints);
     final elapsedMinutes = _calculateElapsedMinutes(activeWalk);
 
     final notices = _buildNotices(
@@ -772,59 +692,27 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Listener(
-                  behavior: HitTestBehavior.opaque,
+                child: WalkMapLayer(
+                  mapController: _mapController,
+                  center: center,
+                  onPositionChanged: (_, hasGesture) {
+                    if (hasGesture) {
+                      _noteMapGesture();
+                    }
+                  },
+                  onMapReady: () {
+                    _mapReady = true;
+                    _applyInitialCenter();
+                  },
+                  urlTemplate: mapTheme.urlTemplate,
+                  subdomains: mapTheme.subdomains,
+                  routePoints: routePoints,
+                  suggestMarkers: suggestMarkers,
+                  heading: _compassHeading ?? _movementHeading,
                   onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
                   onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
                   onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
                   onPointerCancel: spoofEnabled ? _onSpoofPointerCancel : null,
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: center,
-                      initialZoom: 16,
-                      onPositionChanged: (_, hasGesture) {
-                        if (hasGesture) {
-                          _noteMapGesture();
-                        }
-                      },
-                      onMapReady: () {
-                        _mapReady = true;
-                        _applyInitialCenter();
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: mapTheme.urlTemplate,
-                        subdomains: mapTheme.subdomains,
-                        userAgentPackageName: 'com.example.arukuPallarel',
-                      ),
-                      if (routePoints.length > 1)
-                        PolylineLayer(
-                          polylines: [
-                            Polyline(
-                              points: routePoints,
-                              strokeWidth: 4,
-                              color:
-                                  const Color(0xFF36FF97).withValues(alpha: 0.8),
-                            ),
-                          ],
-                        ),
-                      MarkerLayer(
-                        markers: [
-                          ...suggestMarkers,
-                          Marker(
-                            point: center,
-                            width: 120,
-                            height: 120,
-                            child: AppLocationMarker(
-                              heading: _compassHeading ?? _movementHeading,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ),
@@ -835,7 +723,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             top: 8,
             child: SafeArea(
               bottom: false,
-              child: _WalkInfoHeader(
+              child: WalkInfoHeader(
                 distanceKm: distanceKm,
                 elapsedMinutes: elapsedMinutes,
               ),
@@ -847,29 +735,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             bottom: 24,
             child: SafeArea(
               top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (notices.isNotEmpty) ...[
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: notices,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Align(
-                    alignment: Alignment.center,
-                    child: FractionallySizedBox(
-                      widthFactor: 0.55,
-                      child: AppGradientPillButton(
-                        label: mainButtonState.label,
-                        isLoading: mainButtonState.isLoading,
-                        onPressed: mainButtonState.onPressed,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                child: WalkBottomOverlay(
+                  notices: notices,
+                  mainButtonLabel: mainButtonState.label,
+                  isMainButtonLoading: mainButtonState.isLoading,
+                  onMainButtonPressed: mainButtonState.onPressed,
+                ),
             ),
           ),
           Positioned(
@@ -937,36 +808,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     );
   }
 
-  bool _isSamePoint(LatLng a, LatLng b) {
-    return (a.latitude - b.latitude).abs() < 0.000001 &&
-        (a.longitude - b.longitude).abs() < 0.000001;
-  }
 
-  double? _calculateRouteDistanceKm(List<LatLng> points) {
-    if (points.length < 2) {
-      return null;
-    }
-    const earthRadius = 6371000.0; // meters
-    double totalMeters = 0;
-    for (var i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final dLat = _degreesToRadians(p2.latitude - p1.latitude);
-      final dLon = _degreesToRadians(p2.longitude - p1.longitude);
-      final lat1Rad = _degreesToRadians(p1.latitude);
-      final lat2Rad = _degreesToRadians(p2.latitude);
-      final a = sin(dLat / 2) * sin(dLat / 2) +
-          cos(lat1Rad) * cos(lat2Rad) * sin(dLon / 2) * sin(dLon / 2);
-      final c = 2 * asin(sqrt(a));
-      totalMeters += earthRadius * c;
-    }
-    if (totalMeters <= 0) {
-      return null;
-    }
-    return totalMeters / 1000.0;
-  }
-
-  double _degreesToRadians(double degrees) => degrees * (pi / 180.0);
 
   int? _calculateElapsedMinutes(WalkSession? session) {
     final startedAt = session?.startedAt;
@@ -1004,9 +846,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           _movementHeading = normalized;
         }
       }
-      if (_routePoints.isEmpty || !_isSamePoint(_routePoints.last, point)) {
+      if (_routePoints.isEmpty || !MapUtils.isSamePoint(_routePoints.last, point)) {
         _routePoints.add(point);
-        _smoothedRoutePoints = _smoothRoutePoints(_routePoints);
+        _smoothedRoutePoints = RouteSmoother.smooth(_routePoints);
       }
     });
   }
@@ -1035,7 +877,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       setState(() {
         if (_routePoints.isEmpty) {
           _routePoints.addAll(points);
-          _smoothedRoutePoints = _smoothRoutePoints(_routePoints);
+          _smoothedRoutePoints = RouteSmoother.smooth(_routePoints);
           if (_currentCenter == null) {
             _currentCenter = _routePoints.last;
             appliedCenter = _currentCenter;
@@ -1044,14 +886,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         }
         final merged = <LatLng>[...points];
         for (final point in _routePoints) {
-          if (merged.isEmpty || !_isSamePoint(merged.last, point)) {
+          if (merged.isEmpty || !MapUtils.isSamePoint(merged.last, point)) {
             merged.add(point);
           }
         }
         _routePoints
           ..clear()
           ..addAll(merged);
-        _smoothedRoutePoints = _smoothRoutePoints(_routePoints);
+        _smoothedRoutePoints = RouteSmoother.smooth(_routePoints);
         if (_currentCenter == null && _routePoints.isNotEmpty) {
           _currentCenter = _routePoints.last;
           appliedCenter = _currentCenter;
@@ -1074,7 +916,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final notices = <Widget>[];
 
     void addNotice(String text, Color color) {
-      notices.add(_Notice(text: text, color: color));
+      notices.add(WalkNotice(text: text, color: color));
     }
 
     if (!spoofState.enabled && !trackingState.permissionGranted) {
@@ -1173,187 +1015,6 @@ class _MainButtonState {
   final VoidCallback? onPressed;
 }
 
-class _WalkInfoHeader extends StatelessWidget {
-  const _WalkInfoHeader({
-    required this.distanceKm,
-    required this.elapsedMinutes,
-  });
 
-  final double? distanceKm;
-  final int? elapsedMinutes;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final baseTextStyle = theme.textTheme.titleMedium;
-    final scaledFontSize =
-        (baseTextStyle?.fontSize != null ? baseTextStyle!.fontSize! * 1.2 : 19.0);
-    const iconColor = Colors.grey;
-    final distanceText =
-        distanceKm == null ? '-- km' : '${distanceKm!.toStringAsFixed(1)}km';
-    final minutesText =
-        elapsedMinutes == null ? '--分' : '${elapsedMinutes!.toString()}分';
-
-    return Align(
-      alignment: Alignment.topCenter,
-      child: FractionallySizedBox(
-        widthFactor: 0.9, // 横幅を 0.9 倍に
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16), // 縦幅を少しだけ増やす（約 1.1 倍）
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFFFF), // 完全な白
-            borderRadius: BorderRadius.circular(5), // 角丸をさらに控えめに
-            // カード用: エッジが際立つ、短く落ちる影
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x55000000),
-                blurRadius: 10,
-                spreadRadius: 0,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.directions_walk,
-                      color: iconColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      distanceText,
-                      style: baseTextStyle?.copyWith(
-                            fontSize: scaledFontSize,
-                            color: iconColor,
-                            fontWeight: FontWeight.w600,
-                          ) ??
-                          TextStyle(
-                            fontSize: scaledFontSize,
-                            color: iconColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.access_time,
-                      color: iconColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      minutesText,
-                      style: baseTextStyle?.copyWith(
-                            fontSize: scaledFontSize,
-                            color: iconColor,
-                            fontWeight: FontWeight.w600,
-                          ) ??
-                          TextStyle(
-                            fontSize: scaledFontSize,
-                            color: iconColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-
-class _Notice extends StatelessWidget {
-  const _Notice({
-    required this.text,
-    required this.color,
-  });
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadii.small),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-            ),
-      ),
-    );
-  }
-}
-
-class _SuggestPin extends StatelessWidget {
-  const _SuggestPin({
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final pinColor = isSelected ? AppColors.accentWarm : AppColors.accent;
-    final ringColor = isSelected
-        ? AppColors.accentWarm.withValues(alpha: 0.2)
-        : Colors.transparent;
-    return GestureDetector(
-      onTap: onTap,
-      child: Center(
-        child: AnimatedScale(
-          scale: isSelected ? 1.0 : 0.88,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: pinColor,
-              boxShadow: isSelected ? AppShadows.tight : AppShadows.soft,
-            ),
-            child: Container(
-              margin: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: pinColor, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: ringColor,
-                    blurRadius: 10,
-                    spreadRadius: 6,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 

@@ -15,13 +15,12 @@ import '../../router/app_router.dart';
 
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
-import '../../widgets/app_gradient_pill_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
-import '../../widgets/app_floating_button.dart';
 import '../../widgets/app_location_marker.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+import 'widgets/home_bottom_actions.dart';
 
 @RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
@@ -263,51 +262,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               top: false,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    // History Button
-                    AppFloatingButton(
-                      icon: Icons.history,
-                      onTap: () => context.router.push(const HistoryRoute()),
-                    ),
-                    const SizedBox(width: 16),
-                    // Start/Continue Button
-                    Expanded(
-                      child: SizedBox(
-                        height: 56, // Match floating button height roughly or define specific height
-                        // Walk finish button in dialog used 54. Let's use 56 to match floating button size.
-                        child: AppGradientPillButton(
-                          label: buttonLabel,
-                          isLoading: _walkLoading,
-                          height: 56,
-                          onPressed: () {
-                            if (activeWalk != null) {
-                               context.router.push(const WalkRoute());
-                               return;
-                            }
-                            setState(() {
-                              _showStartConfirm = true;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Settings Button
-                    AppFloatingButton(
-                      icon: Icons.settings,
-                      onTap: () {
-                         showModalBottomSheet(
-                           context: context,
-                           isScrollControlled: true,
-                           backgroundColor: Colors.transparent,
-                           builder: (_) => const SettingsSheet(),
-                         );
-                      },
-                    ),
-                  ],
-                ),
+                  child: HomeBottomActions(
+                    startWalkLabel: buttonLabel,
+                    isStartWalkLoading: _walkLoading,
+                    onHistoryTap: () => context.router.push(const HistoryRoute()),
+                    onSettingsTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const SettingsSheet(),
+                      );
+                    },
+                    onStartWalkTap: () {
+                      if (activeWalk != null) {
+                        context.router.push(const WalkRoute());
+                        return;
+                      }
+                      setState(() {
+                        _showStartConfirm = true;
+                      });
+                    },
+                  ),
               ),
             ),
           ),
