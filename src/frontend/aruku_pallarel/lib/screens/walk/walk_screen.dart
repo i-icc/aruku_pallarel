@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' as ui;
+
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_compass/flutter_compass.dart';
@@ -9,7 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
-import 'package:url_launcher/url_launcher.dart';
+
 
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../features/share/services/backend_exception.dart';
@@ -23,10 +23,21 @@ import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
-import '../../widgets/app_primary_button.dart';
+
+
+import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_floating_button.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+
 import '../../router/app_router.dart';
+import '../../features/walk/utils/map_utils.dart';
+import '../../features/walk/utils/route_smoother.dart';
+import 'widgets/walk_info_header.dart';
+import 'widgets/walk_notice.dart';
+import 'widgets/walk_suggest_pin.dart';
+import 'widgets/walk_map_layer.dart';
+import 'widgets/walk_bottom_overlay.dart';
 
 @RoutePage()
 class WalkScreen extends ConsumerStatefulWidget {
@@ -42,8 +53,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   static const Duration _spoofHoldDuration = Duration(seconds: 2);
   static const double _spoofMoveThreshold = 12;
   static const Duration _mapMoveDuration = Duration(milliseconds: 600);
-  static const int _routeSplineSteps = 8;
-  static const double _routeSplineAlpha = 0.5;
+
 
   bool _finishLoading = false;
   String? _locationError;
@@ -57,7 +67,6 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   ProviderSubscription<SelectedSuggestState>? _selectedSuggestSubscription;
   final MapController _mapController = MapController();
   late final AnimationController _mapMoveController;
-  late final AnimationController _headingPulseController;
   LatLng? _mapMoveStart;
   LatLng? _mapMoveTarget;
   double? _mapMoveZoom;
@@ -71,6 +80,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   Offset? _spoofPressPosition;
   Offset? _spoofStartPosition;
   int? _spoofPointerId;
+  Timer? _elapsedTimer;
+  bool _showFinishConfirm = false;
 
   @override
   void initState() {
@@ -81,10 +92,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     )
       ..value = 1.0
       ..addListener(_handleMapMoveTick);
-    _headingPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
+
     _selectedSuggestSubscription = ref.listenManual(
       selectedSuggestNotifierProvider,
       (previous, next) {
@@ -115,6 +123,15 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         _latestSuggests = const [];
         _lastFocusedSuggestId = null;
         _startTracking();
+      },
+    );
+    _elapsedTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {});
       },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -287,8 +304,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _selectedSuggestSubscription?.close();
     WidgetsBinding.instance.removeObserver(this);
     _cancelSpoofTimer();
+    _elapsedTimer?.cancel();
     _mapMoveController.dispose();
-    _headingPulseController.dispose();
     super.dispose();
   }
 
@@ -420,7 +437,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             point: suggest.position,
             width: 46,
             height: 46,
-            child: _SuggestPin(
+            child: WalkSuggestPin(
               isSelected: suggest.suggestId == selectedSuggestId,
               onTap: () {
                 ref
@@ -467,93 +484,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     return normalized;
   }
 
-  double _catmullT(double t, LatLng p0, LatLng p1) {
-    final dx = p1.latitude - p0.latitude;
-    final dy = p1.longitude - p0.longitude;
-    final dist = sqrt(dx * dx + dy * dy);
-    if (dist == 0) {
-      return t + 0.000001;
-    }
-    return t + pow(dist, _routeSplineAlpha).toDouble();
-  }
 
-  LatLng _interpolateLatLng(
-    LatLng start,
-    LatLng end,
-    double t0,
-    double t1,
-    double t,
-  ) {
-    final span = t1 - t0;
-    if (span.abs() < 0.000001) {
-      return start;
-    }
-    return _lerpLatLng(start, end, (t - t0) / span);
-  }
 
-  LatLng _catmullRomPoint(
-    LatLng p0,
-    LatLng p1,
-    LatLng p2,
-    LatLng p3,
-    double t0,
-    double t1,
-    double t2,
-    double t3,
-    double t,
-  ) {
-    final a1 = _interpolateLatLng(p0, p1, t0, t1, t);
-    final a2 = _interpolateLatLng(p1, p2, t1, t2, t);
-    final a3 = _interpolateLatLng(p2, p3, t2, t3, t);
-    final b1 = _interpolateLatLng(a1, a2, t0, t2, t);
-    final b2 = _interpolateLatLng(a2, a3, t1, t3, t);
-    return _interpolateLatLng(b1, b2, t1, t2, t);
-  }
 
-  List<LatLng> _catmullRomSegment(
-    LatLng p0,
-    LatLng p1,
-    LatLng p2,
-    LatLng p3,
-  ) {
-    final t0 = 0.0;
-    final t1 = _catmullT(t0, p0, p1);
-    final t2 = _catmullT(t1, p1, p2);
-    final t3 = _catmullT(t2, p2, p3);
-    final segment = <LatLng>[];
-    for (var i = 0; i <= _routeSplineSteps; i++) {
-      final t = ui.lerpDouble(t1, t2, i / _routeSplineSteps) ?? t1;
-      segment.add(_catmullRomPoint(p0, p1, p2, p3, t0, t1, t2, t3, t));
-    }
-    return segment;
-  }
-
-  List<LatLng> _smoothRoutePoints(List<LatLng> points) {
-    if (points.length < 2) {
-      return List<LatLng>.from(points);
-    }
-    final smoothed = <LatLng>[];
-    for (var i = 0; i < points.length - 1; i++) {
-      final p0 = i == 0 ? points[i] : points[i - 1];
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final p3 = i + 2 < points.length ? points[i + 2] : points[i + 1];
-      final segment = _catmullRomSegment(p0, p1, p2, p3);
-      if (smoothed.isNotEmpty && segment.isNotEmpty) {
-        segment.removeAt(0);
-      }
-      smoothed.addAll(segment);
-    }
-    return smoothed;
-  }
-
-  LatLng _lerpLatLng(LatLng start, LatLng target, double t) {
-    final lat =
-        ui.lerpDouble(start.latitude, target.latitude, t) ?? target.latitude;
-    final lng =
-        ui.lerpDouble(start.longitude, target.longitude, t) ?? target.longitude;
-    return LatLng(lat, lng);
-  }
 
   LatLng _resolveAnimatedCenter(LatLng center) {
     final start = _mapMoveStart;
@@ -561,71 +494,11 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     if (start == null || target == null) {
       return center;
     }
-    if (!_isSamePoint(target, center)) {
+    if (!MapUtils.isSamePoint(target, center)) {
       return center;
     }
     final t = Curves.easeInOutCubic.transform(_mapMoveController.value);
-    return _lerpLatLng(start, target, t);
-  }
-
-  Widget _buildHeadingMarker(double? heading) {
-    final normalized = _normalizeHeading(heading);
-    return AnimatedBuilder(
-      animation: _headingPulseController,
-      builder: (context, child) {
-        final pulse = Curves.easeOut.transform(_headingPulseController.value);
-        // 元の 18–44px をベースに、白と色の比率はほぼそのままに 2.5倍相当へ拡大
-        final ringSize = ui.lerpDouble(45, 120, pulse) ?? 120;
-        final ringOpacity = (1 - pulse) * 0.35;
-        return SizedBox(
-          width: 120,
-          height: 120,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: ringSize,
-                height: ringSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  // 波の色は薄めにして、白い輪郭がしっかり見えるように
-                  color:
-                      const Color(0xFF36FF97).withValues(alpha: ringOpacity * 0.25),
-                  border: Border.all(
-                    // 枠線は 2px → 約2.5倍の 5px で白の存在感をキープ
-                    color: Colors.white.withValues(alpha: ringOpacity + 0.05),
-                    width: 5,
-                  ),
-                ),
-              ),
-              if (normalized != null)
-                Transform.rotate(
-                  angle: normalized * pi / 180,
-                  child: CustomPaint(
-                    size: const Size(120, 120),
-                    painter: _HeadingConePainter(
-                      color: const Color(0xFF36FF97).withValues(alpha: 0.2),
-                    ),
-                  ),
-                ),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF36FF97),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 5.5,
-                  ),
-                  boxShadow: AppShadows.tight,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    return RouteSmoother.lerpLatLng(start, target, t);
   }
 
   void _handleMapMoveTick() {
@@ -633,7 +506,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return;
     }
     final t = Curves.easeInOutCubic.transform(_mapMoveController.value);
-    final position = _lerpLatLng(_mapMoveStart!, _mapMoveTarget!, t);
+    final position = RouteSmoother.lerpLatLng(_mapMoveStart!, _mapMoveTarget!, t);
     final targetZoom = _mapMoveZoom ?? _safeZoom();
     _mapController.move(position, targetZoom);
   }
@@ -651,7 +524,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _mapMoveStart = start;
     _mapMoveTarget = target;
     _mapMoveZoom = targetZoom;
-    if (_isSamePoint(start, target)) {
+    if (MapUtils.isSamePoint(start, target)) {
       _mapMoveController.value = 1.0;
       _mapController.move(target, targetZoom);
       return;
@@ -735,17 +608,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _animateMapMove(latLng);
   }
 
-  Future<void> _openSettings() async {
-    final uri = Uri.parse('app-settings:');
-    if (!await launchUrl(uri)) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open settings.')),
-      );
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -769,19 +632,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final routePoints = _smoothedRoutePoints.isNotEmpty
         ? _smoothedRoutePoints
         : _routePoints;
-
-    final title = activeWalk == null ? 'No active walk' : 'Live walk';
-    final subtitle = activeWalk == null
-        ? 'Return to Home to start a session.'
-        : 'ID: ${activeWalk.walkId}';
+    final distanceKm = MapUtils.calculateRouteDistanceKm(routePoints);
+    final elapsedMinutes = _calculateElapsedMinutes(activeWalk);
 
     final notices = _buildNotices(
       spoofState: spoofState,
       trackingState: trackingState,
     );
 
-    final actions = _buildActions(
-      context,
+    final mainButtonState = _resolveMainButtonState(
+      context: context,
       activeWalk: activeWalk,
       spoofEnabled: spoofEnabled,
       trackingState: trackingState,
@@ -817,17 +677,24 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       body: Stack(
         children: [
           Positioned.fill(
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
-              onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
-              onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
-              onPointerCancel: spoofEnabled ? _onSpoofPointerCancel : null,
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: center,
-                  initialZoom: 16,
+            child: Container(
+              margin: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                // マップ用: エッジがはっきりした短めの影
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x33000000), // やや強めの影
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: WalkMapLayer(
+                  mapController: _mapController,
+                  center: center,
                   onPositionChanged: (_, hasGesture) {
                     if (hasGesture) {
                       _noteMapGesture();
@@ -837,52 +704,54 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                     _mapReady = true;
                     _applyInitialCenter();
                   },
+                  urlTemplate: mapTheme.urlTemplate,
+                  subdomains: mapTheme.subdomains,
+                  routePoints: routePoints,
+                  suggestMarkers: suggestMarkers,
+                  heading: _compassHeading ?? _movementHeading,
+                  onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
+                  onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
+                  onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
+                  onPointerCancel: spoofEnabled ? _onSpoofPointerCancel : null,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: mapTheme.urlTemplate,
-                    subdomains: mapTheme.subdomains,
-                    userAgentPackageName: 'com.example.arukuPallarel',
-                  ),
-                  if (routePoints.length > 1)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: routePoints,
-                          strokeWidth: 4,
-                          color:
-                              const Color(0xFF36FF97).withValues(alpha: 0.7),
-                        ),
-                      ],
-                    ),
-                  MarkerLayer(
-                    markers: [
-                      ...suggestMarkers,
-                      Marker(
-                        point: center,
-                        width: 48,
-                        height: 48,
-                        child: _buildHeadingMarker(
-                          _compassHeading ?? _movementHeading,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ),
           ),
           Positioned(
             left: 16,
             right: 16,
-            bottom: 16,
+            top: 8,
+            child: SafeArea(
+              bottom: false,
+              child: WalkInfoHeader(
+                distanceKm: distanceKm,
+                elapsedMinutes: elapsedMinutes,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 24,
             child: SafeArea(
               top: false,
-              child: _BottomPanel(
-                title: title,
-                subtitle: subtitle,
-                notices: notices,
-                actions: actions,
+                child: WalkBottomOverlay(
+                  notices: notices,
+                  mainButtonLabel: mainButtonState.label,
+                  isMainButtonLoading: mainButtonState.isLoading,
+                  onMainButtonPressed: mainButtonState.onPressed,
+                ),
+            ),
+          ),
+          Positioned(
+            left: 28,
+            bottom: 28,
+            child: SafeArea(
+              top: false,
+              right: false,
+              child: AppFloatingButton(
+                icon: Icons.chat,
+                onTap: () => context.router.push(const ChatRoute()),
               ),
             ),
           ),
@@ -892,20 +761,70 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             child: SafeArea(
               left: false,
               bottom: false,
-              minimum: const EdgeInsets.only(top: 8, right: 8),
+              minimum: const EdgeInsets.only(top: 1, right: 1),
               child: MapInfoButton(
                 onTap: () => showMapAttributionSheet(context, mapThemeId),
               ),
             ),
           ),
+          if (_showFinishConfirm) ...[
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _showFinishConfirm = false;
+                  });
+                },
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+            Center(
+              child: SafeArea(
+                child: AppConfirmDialog(
+                  title: '散歩を終わりますか？',
+                  description: '※歩きスマホにご注意ください',
+                  confirmLabel: 'おわる',
+                  cancelLabel: 'もどる',
+                  onCancel: () {
+                    setState(() {
+                      _showFinishConfirm = false;
+                    });
+                  },
+                  onConfirm: () {
+                    setState(() {
+                      _showFinishConfirm = false;
+                    });
+                    _finishWalk();
+                  },
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  bool _isSamePoint(LatLng a, LatLng b) {
-    return (a.latitude - b.latitude).abs() < 0.000001 &&
-        (a.longitude - b.longitude).abs() < 0.000001;
+
+
+  int? _calculateElapsedMinutes(WalkSession? session) {
+    final startedAt = session?.startedAt;
+    if (startedAt == null) {
+      return null;
+    }
+    final start = DateTime.tryParse(startedAt);
+    if (start == null) {
+      return null;
+    }
+    final now = DateTime.now();
+    final diff = now.difference(start);
+    if (diff.isNegative) {
+      return 0;
+    }
+    return diff.inMinutes;
   }
 
   void _recordRoutePoint(
@@ -927,9 +846,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           _movementHeading = normalized;
         }
       }
-      if (_routePoints.isEmpty || !_isSamePoint(_routePoints.last, point)) {
+      if (_routePoints.isEmpty || !MapUtils.isSamePoint(_routePoints.last, point)) {
         _routePoints.add(point);
-        _smoothedRoutePoints = _smoothRoutePoints(_routePoints);
+        _smoothedRoutePoints = RouteSmoother.smooth(_routePoints);
       }
     });
   }
@@ -958,7 +877,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       setState(() {
         if (_routePoints.isEmpty) {
           _routePoints.addAll(points);
-          _smoothedRoutePoints = _smoothRoutePoints(_routePoints);
+          _smoothedRoutePoints = RouteSmoother.smooth(_routePoints);
           if (_currentCenter == null) {
             _currentCenter = _routePoints.last;
             appliedCenter = _currentCenter;
@@ -967,14 +886,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         }
         final merged = <LatLng>[...points];
         for (final point in _routePoints) {
-          if (merged.isEmpty || !_isSamePoint(merged.last, point)) {
+          if (merged.isEmpty || !MapUtils.isSamePoint(merged.last, point)) {
             merged.add(point);
           }
         }
         _routePoints
           ..clear()
           ..addAll(merged);
-        _smoothedRoutePoints = _smoothRoutePoints(_routePoints);
+        _smoothedRoutePoints = RouteSmoother.smooth(_routePoints);
         if (_currentCenter == null && _routePoints.isNotEmpty) {
           _currentCenter = _routePoints.last;
           appliedCenter = _currentCenter;
@@ -997,7 +916,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final notices = <Widget>[];
 
     void addNotice(String text, Color color) {
-      notices.add(_Notice(text: text, color: color));
+      notices.add(WalkNotice(text: text, color: color));
     }
 
     if (!spoofState.enabled && !trackingState.permissionGranted) {
@@ -1042,220 +961,60 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         .toList();
   }
 
-  List<Widget> _buildActions(
-    BuildContext context, {
+  _MainButtonState _resolveMainButtonState({
+    required BuildContext context,
     required WalkSession? activeWalk,
     required bool spoofEnabled,
     required WalkTrackingState trackingState,
   }) {
-    final actions = <Widget>[];
-
+    // 位置情報がまだ許可されていない場合
     if (!trackingState.permissionGranted && !spoofEnabled) {
-      actions.add(
-        AppPrimaryButton(
-          label: trackingState.isRequesting
-              ? 'Requesting Location'
-              : 'Enable Location',
-          icon: Icons.my_location,
-          isLoading: trackingState.isRequesting,
-          onPressed: trackingState.isRequesting ? null : _startTracking,
-        ),
+      final label = trackingState.isRequesting
+          ? '位置情報をリクエスト中...'
+          : '位置情報を有効にする';
+      return _MainButtonState(
+        label: label,
+        isLoading: trackingState.isRequesting,
+        onPressed: trackingState.isRequesting ? null : _startTracking,
       );
-      actions.add(const SizedBox(height: 8));
-      actions.add(
-        OutlinedButton(
-          onPressed: _openSettings,
-          child: const Text('Open Settings'),
-        ),
-      );
-      return actions;
     }
 
+    // 散歩セッションが存在しない場合
     if (activeWalk == null) {
-      actions.add(
-        AppPrimaryButton(
-          label: 'Back to Home',
-          icon: Icons.home_outlined,
-          onPressed: () => context.router.pop(),
-        ),
-      );
-    } else {
-      actions.add(
-        AppPrimaryButton(
-          label: 'Finish Walk',
-          icon: Icons.stop_circle_outlined,
-          isLoading: _finishLoading,
-          backgroundColor: AppColors.danger,
-          onPressed: _finishLoading ? null : _finishWalk,
-        ),
-      );
-      actions.add(const SizedBox(height: 8));
-      actions.add(
-        OutlinedButton.icon(
-          icon: const Icon(Icons.chat_bubble_outline),
-          label: const Text('Chat'),
-          onPressed: () => context.router.push(const ChatRoute()),
-        ),
+      return _MainButtonState(
+        label: 'ホームに戻る',
+        isLoading: false,
+        onPressed: () => context.router.pop(),
       );
     }
 
-    return actions;
-  }
-}
-
-class _BottomPanel extends StatelessWidget {
-  const _BottomPanel({
-    required this.title,
-    required this.subtitle,
-    required this.notices,
-    required this.actions,
-  });
-
-  final String title;
-  final String subtitle;
-  final List<Widget> notices;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadii.medium),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: theme.textTheme.titleLarge),
-          const SizedBox(height: 4),
-          Text(subtitle, style: theme.textTheme.bodySmall),
-          if (notices.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...notices,
-          ],
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            ...actions,
-          ],
-        ],
-      ),
+    // 散歩中の場合
+    return _MainButtonState(
+      label: '散歩を終わる',
+      isLoading: _finishLoading,
+      onPressed: _finishLoading
+          ? null
+          : () {
+              setState(() {
+                _showFinishConfirm = true;
+              });
+            },
     );
   }
 }
 
-class _Notice extends StatelessWidget {
-  const _Notice({
-    required this.text,
-    required this.color,
+class _MainButtonState {
+  const _MainButtonState({
+    required this.label,
+    required this.isLoading,
+    required this.onPressed,
   });
 
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadii.small),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-            ),
-      ),
-    );
-  }
+  final String label;
+  final bool isLoading;
+  final VoidCallback? onPressed;
 }
 
-class _SuggestPin extends StatelessWidget {
-  const _SuggestPin({
-    required this.isSelected,
-    required this.onTap,
-  });
 
-  final bool isSelected;
-  final VoidCallback onTap;
 
-  @override
-  Widget build(BuildContext context) {
-    final pinColor = isSelected ? AppColors.accentWarm : AppColors.accent;
-    final ringColor = isSelected
-        ? AppColors.accentWarm.withValues(alpha: 0.2)
-        : Colors.transparent;
-    return GestureDetector(
-      onTap: onTap,
-      child: Center(
-        child: AnimatedScale(
-          scale: isSelected ? 1.0 : 0.88,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: pinColor,
-              boxShadow: isSelected ? AppShadows.tight : AppShadows.soft,
-            ),
-            child: Container(
-              margin: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: pinColor, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: ringColor,
-                    blurRadius: 10,
-                    spreadRadius: 6,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
-class _HeadingConePainter extends CustomPainter {
-  const _HeadingConePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    const sweep = pi / 3;
-    final startAngle = -pi / 2 - sweep / 2;
-    final path = ui.Path()
-      ..moveTo(center.dx, center.dy)
-      ..arcTo(
-        ui.Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        sweep,
-        false,
-      )
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _HeadingConePainter oldDelegate) {
-    return oldDelegate.color != color;
-  }
-}

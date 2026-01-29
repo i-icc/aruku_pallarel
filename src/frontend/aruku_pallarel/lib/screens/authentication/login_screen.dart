@@ -35,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          context.router.replaceAll(const [BaseRoute()]);
+          context.router.replaceAll(const [HomeRoute()]);
         });
       }
     }
@@ -62,7 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) {
         return;
       }
-      context.router.replaceAll(const [BaseRoute()]);
+      context.router.replaceAll(const [HomeRoute()]);
     } on FirebaseAuthException catch (error) {
       setState(() {
         _error = error.message ?? 'Login failed.';
@@ -101,7 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) {
         return;
       }
-      context.router.replaceAll(const [BaseRoute()]);
+      context.router.replaceAll(const [HomeRoute()]);
     } on FirebaseAuthException catch (error) {
       setState(() {
         _error = error.message ?? 'Sign up failed.';

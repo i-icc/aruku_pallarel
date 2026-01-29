@@ -11,22 +11,6 @@
 part of 'app_router.dart';
 
 /// generated route for
-/// [BaseScreen]
-class BaseRoute extends PageRouteInfo<void> {
-  const BaseRoute({List<PageRouteInfo>? children})
-    : super(BaseRoute.name, initialChildren: children);
-
-  static const String name = 'BaseRoute';
-
-  static PageInfo page = PageInfo(
-    name,
-    builder: (data) {
-      return const BaseScreen();
-    },
-  );
-}
-
-/// generated route for
 /// [ChatScreen]
 class ChatRoute extends PageRouteInfo<void> {
   const ChatRoute({List<PageRouteInfo>? children})
@@ -133,22 +117,6 @@ class LoginRoute extends PageRouteInfo<void> {
     name,
     builder: (data) {
       return const LoginScreen();
-    },
-  );
-}
-
-/// generated route for
-/// [SettingsScreen]
-class SettingsRoute extends PageRouteInfo<void> {
-  const SettingsRoute({List<PageRouteInfo>? children})
-    : super(SettingsRoute.name, initialChildren: children);
-
-  static const String name = 'SettingsRoute';
-
-  static PageInfo page = PageInfo(
-    name,
-    builder: (data) {
-      return const SettingsScreen();
     },
   );
 }
