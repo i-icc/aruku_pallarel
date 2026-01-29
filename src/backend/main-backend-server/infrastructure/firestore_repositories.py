@@ -8,6 +8,9 @@ from utils.time import ensure_utc
 from firestore_utils import delete_document_recursive
 
 
+MAX_BATCH_SIZE = 64
+
+
 class FirestoreUserRepository:
     def __init__(self, db):
         self._db = db
@@ -135,6 +138,63 @@ class FirestoreWalkRepository:
 
         flattened.sort(key=lambda entry: entry.timestamp)
         return flattened
+
+    def record_location_points(self, user_id: str, walk_id: str, points: list[LocationPoint]):
+        walk_ref = self._walks_ref(user_id).document(walk_id)
+        locations_ref = walk_ref.collection("locations")
+
+        # Get latest batch
+        snapshot = (
+            locations_ref.order_by("index", direction=firestore.Query.DESCENDING)
+            .limit(1)
+            .get()
+        )
+
+        if snapshot:
+            latest_doc = snapshot[0]
+            data = latest_doc.to_dict()
+            index = data.get("index", 1)
+            count = data.get("count", 0)
+        else:
+            index = 1
+            count = 0
+
+        pending_points = points
+        current_index = index
+        current_count = count
+
+        while pending_points:
+            capacity = MAX_BATCH_SIZE - current_count
+            if capacity <= 0:
+                current_index += 1
+                current_count = 0
+                capacity = MAX_BATCH_SIZE
+
+            take_count = min(len(pending_points), capacity)
+            chunk = pending_points[:take_count]
+            pending_points = pending_points[take_count:]
+
+            batch_ref = locations_ref.document(str(current_index))
+            
+            payload = [
+                {
+                    "timestamp": p.timestamp,
+                    "geo": firestore.GeoPoint(p.lat, p.lon),
+                }
+                for p in chunk
+            ]
+
+            data_to_update = {
+                "index": current_index,
+                "count": firestore.Increment(len(chunk)),
+                "points": firestore.ArrayUnion(payload),
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }
+            if current_count == 0:
+                data_to_update["createdAt"] = firestore.SERVER_TIMESTAMP
+
+            batch_ref.set(data_to_update, merge=True)
+            current_count += len(chunk)
 
 
 class FirestoreSuggestionRequestRepository:

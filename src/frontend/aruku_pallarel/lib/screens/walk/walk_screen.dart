@@ -206,8 +206,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return;
     }
 
-    final granted =
-        await ref.read(walkTrackingNotifierProvider.notifier).startTracking();
+    final granted = await ref
+        .read(walkTrackingNotifierProvider.notifier)
+        .startTracking(activeWalk.walkId);
     await ref.read(walkTrackingNotifierProvider.notifier).refreshDebugState();
     if (!granted) {
       if (mounted) {

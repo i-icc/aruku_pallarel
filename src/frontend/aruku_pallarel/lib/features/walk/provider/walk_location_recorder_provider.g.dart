@@ -7,7 +7,7 @@ part of 'walk_location_recorder_provider.dart';
 // **************************************************************************
 
 String _$walkLocationRecorderNotifierHash() =>
-    r'615ef58697ba42d5d73aff41fc11e63ad09ab6c2';
+    r'43ff19d24e397b8bb6e9ea837b9c08c42072301e';
 
 /// See also [WalkLocationRecorderNotifier].
 @ProviderFor(WalkLocationRecorderNotifier)

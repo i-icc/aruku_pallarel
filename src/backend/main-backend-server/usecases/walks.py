@@ -24,6 +24,11 @@ class WalkRepository(Protocol):
     def get_location_points(self, user_id: str, walk_id: str) -> list[LocationPoint]:
         raise NotImplementedError
 
+    def record_location_points(
+        self, user_id: str, walk_id: str, points: list[LocationPoint]
+    ) -> None:
+        raise NotImplementedError
+
 
 class SuggestionRequestRepository(Protocol):
     def create_request(
@@ -203,6 +208,48 @@ def _distance_since(
         total += haversine_distance_m(prev.lat, prev.lon, point.lat, point.lon)
         prev = point
     return total, total_points, used_points
+
+
+def record_locations(
+    repo: WalkRepository,
+    requests_repo: SuggestionRequestRepository,
+    tasks_queue: TasksQueue,
+    user_id: str,
+    walk_id: str,
+    points: list[LocationPoint],
+    now: datetime,
+    cooldown_minutes: int = 5,
+    min_distance_meters: float = 250.0,
+) -> None:
+    data = repo.get_walk(user_id, walk_id)
+    if data is None:
+        raise AppError("WALK_NOT_FOUND", "Walk not found", 404)
+
+    if data.get("status") != "active":
+        logger.info(
+            "record_locations_skipped walk_inactive user_id=%s walk_id=%s",
+            user_id,
+            walk_id,
+        )
+        return
+
+    repo.record_location_points(user_id, walk_id, points)
+
+    # Automatically check and trigger suggestion
+    try:
+        request_suggestion(
+            repo,
+            requests_repo,
+            tasks_queue,
+            user_id,
+            walk_id,
+            now,
+            cooldown_minutes=cooldown_minutes,
+            min_distance_meters=min_distance_meters,
+        )
+    except Exception as e:
+        # Don't fail the location recording if suggestion fails
+        logger.error("Failed to trigger suggestion in record_locations: %s", e)
 
 
 def _extract_lat_lon(value):

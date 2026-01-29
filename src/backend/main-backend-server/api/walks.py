@@ -7,13 +7,18 @@ from flask import Blueprint, jsonify, request
 import firebase_client
 from auth import current_user_id, require_auth
 from domain.errors import AppError
-from domain.models import Location
+from domain.models import Location, LocationPoint
 from infrastructure.firestore_repositories import (
     FirestoreSuggestionRequestRepository,
     FirestoreWalkRepository,
 )
 from infrastructure.tasks_queue import TasksQueueClient
-from usecases.walks import finish_walk, request_suggestion, start_walk
+from usecases.walks import (
+    finish_walk,
+    record_locations,
+    request_suggestion,
+    start_walk,
+)
 from utils.time import to_rfc3339
 
 walks_api = Blueprint("walks_api", __name__, url_prefix="/v1")
@@ -103,3 +108,52 @@ def request_suggestion_handler(walk_id):
     if result.request_id:
         response["requestId"] = result.request_id
     return jsonify(response)
+@walks_api.post("/walks/<walk_id>/locations")
+@require_auth
+def record_locations_handler(walk_id):
+    payload = request.get_json(silent=True)
+    if payload is None:
+        raise AppError("INVALID_ARGUMENT", "Body is required", 400)
+
+    if isinstance(payload, dict):
+        raw_points = [payload]
+    elif isinstance(payload, list):
+        raw_points = payload
+    else:
+        raise AppError("INVALID_ARGUMENT", "Invalid payload format", 400)
+
+    points = []
+    for p in raw_points:
+        coords = p.get("coords")
+        if not coords:
+            continue
+        lat = coords.get("latitude")
+        lon = coords.get("longitude")
+        ts_str = p.get("timestamp")
+        if lat is None or lon is None or ts_str is None:
+            continue
+
+        try:
+            if ts_str.endswith("Z"):
+                ts_str = ts_str.replace("Z", "+00:00")
+            ts = datetime.fromisoformat(ts_str)
+            points.append(LocationPoint(lat=lat, lon=lon, timestamp=ts))
+        except ValueError:
+            continue
+
+    if points:
+        user_id = current_user_id()
+        now = datetime.now(timezone.utc)
+        record_locations(
+            _walk_repo(),
+            _request_repo(),
+            _tasks_queue(),
+            user_id,
+            walk_id,
+            points,
+            now,
+            cooldown_minutes=SUGGESTION_COOLDOWN_MINUTES,
+            min_distance_meters=SUGGESTION_MIN_DISTANCE_METERS,
+        )
+
+    return jsonify(status="ok", count=len(points))

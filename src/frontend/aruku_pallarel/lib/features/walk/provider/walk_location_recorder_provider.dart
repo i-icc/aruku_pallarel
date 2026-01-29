@@ -8,7 +8,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:locus/locus.dart' as locus;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import 'location_spoof_provider.dart';
 import '../infrastructure/walk_api.dart';
 import '../../share/services/backend_exception.dart';
 
@@ -103,20 +102,8 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
 
     _subscription = locus.Locus.location.stream.listen(
       (location) {
-        if (ref.read(locationSpoofNotifierProvider).enabled) {
-          return;
-        }
-        final coords = location.coords;
-        if (!coords.isValid) {
-          return;
-        }
-        _appendLivePoint(
-          _LocationPoint(
-            timestamp: location.timestamp,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          ),
-        );
+        // We now rely on locus autoSync (HTTP sync) for stream locations.
+        // Manual points (spoofing) are handled separately.
       },
       onError: (error) {
         state = state.copyWith(errorMessage: error.toString());

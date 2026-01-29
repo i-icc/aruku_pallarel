@@ -121,7 +121,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       if (startLocation == null) {
          bool granted = false;
          try {
-             granted = await trackingNotifier.startTracking().timeout(const Duration(seconds: 10));
+             granted = await trackingNotifier.requestPermission().timeout(const Duration(seconds: 10));
          } catch (_) {}
 
          if (!granted) {
