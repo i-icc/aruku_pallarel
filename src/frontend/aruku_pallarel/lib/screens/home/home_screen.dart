@@ -16,6 +16,7 @@ import '../../router/app_router.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
 import '../../widgets/app_gradient_pill_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_floating_button.dart';
 import '../../widgets/app_location_marker.dart';
 import '../../widgets/settings_sheet.dart';
@@ -37,6 +38,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final MapController _mapController = MapController();
   bool _walkLoading = false;
   LatLng? _currentCenter;
+  bool _showStartConfirm = false;
 
 
   @override
@@ -112,7 +114,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final wasTracking = ref.read(walkTrackingNotifierProvider).isTracking;
     var stopTrackingOnFailure = false;
     var navigated = false;
-
     try {
       final spoofState = ref.read(locationSpoofNotifierProvider);
       final spoofLocation = spoofState.enabled ? spoofState.location : null;
@@ -135,7 +136,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
          stopTrackingOnFailure = !wasTracking;
 
          try {
-             final current = await locus.LocusLocation.getCurrentPosition(timeout: 10);
+             // Added a secondary timeout at the Dart level to prevent native hang from blocking the UI
+             final current = await locus.LocusLocation.getCurrentPosition(timeout: 10)
+                 .timeout(const Duration(seconds: 60));
              final coords = current.coords;
              if (coords.isValid) {
                  startLocation = LatLng(coords.latitude, coords.longitude);
@@ -147,6 +150,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       startLocation ??= _fallbackCenter;
 
+      if (!mounted) return;
+      
+      // Actual API call
       await ref.read(activeWalkNotifierProvider.notifier).startWalk(
         lat: startLocation.latitude,
         lon: startLocation.longitude,
@@ -163,14 +169,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
        } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
        }
+    } catch (e) {
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting walk: $e')));
+       }
     } finally {
-        if (!navigated && stopTrackingOnFailure) {
-            await trackingNotifier.stopTracking();
-        }
         if (mounted) {
             setState(() {
                 _walkLoading = false;
             });
+        }
+        if (!navigated && stopTrackingOnFailure) {
+            try {
+                // Cleanup in background so a hang here doesn't block UI state update
+                trackingNotifier.stopTracking();
+            } catch (_) {}
         }
     }
   }
@@ -217,8 +230,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         markers: [
                           Marker(
                             point: _currentCenter!,
-                            width: 48,
-                            height: 48,
+                            width: 120,
+                            height: 120,
                             child: const AppLocationMarker(),
                           ),
                         ],
@@ -268,7 +281,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           label: buttonLabel,
                           isLoading: _walkLoading,
                           height: 56,
-                          onPressed: _startWalk,
+                          onPressed: () {
+                            if (activeWalk != null) {
+                               context.router.push(const WalkRoute());
+                               return;
+                            }
+                            setState(() {
+                              _showStartConfirm = true;
+                            });
+                          },
                         ),
                       ),
                     ),
@@ -290,6 +311,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
             ),
           ),
+          if (_showStartConfirm) ...[
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    _showStartConfirm = false;
+                  });
+                },
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+            Center(
+              child: SafeArea(
+                child: AppConfirmDialog(
+                  title: '散歩を始めますか？',
+                  description: '位置情報を利用して移動距離を記録します',
+                  confirmLabel: '散歩を始める',
+                  cancelLabel: 'もどる',
+                  onCancel: () {
+                    setState(() {
+                      _showStartConfirm = false;
+                    });
+                  },
+                  onConfirm: () {
+                    setState(() {
+                      _showStartConfirm = false;
+                    });
+                    _startWalk();
+                  },
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -815,8 +815,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                           ...suggestMarkers,
                           Marker(
                             point: center,
-                            width: 48,
-                            height: 48,
+                            width: 120,
+                            height: 120,
                             child: AppLocationMarker(
                               heading: _compassHeading ?? _movementHeading,
                             ),
