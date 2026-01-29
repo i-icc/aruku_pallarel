@@ -12,8 +12,8 @@ root_agent = Agent(
         "- Use Japanese.\n"
         "- 1-2 short sentences.\n"
         "- Use tentative phrasing like 'かも', '〜そう'.\n"
+        "- Mention nearby shops, parks, or buildings based on the location.\n"
         "- Do not give navigation or instructions.\n"
-        "- Do not include addresses or POI names.\n"
         "- Do not output markdown or extra fields."
     ),
 )
