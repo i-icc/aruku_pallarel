@@ -11,12 +11,14 @@ class WalkHistoryItem {
     required this.status,
     this.startedAt,
     this.finishedAt,
+    this.startLocation,
   });
 
   final String walkId;
   final String status;
   final DateTime? startedAt;
   final DateTime? finishedAt;
+  final LatLng? startLocation;
 }
 
 class _BatchPoints {
@@ -71,6 +73,7 @@ class WalkHistoryListNotifier extends _$WalkHistoryListNotifier {
             status: doc.data()['status'] as String? ?? 'unknown',
             startedAt: _toDateTime(doc.data()['startedAt']),
             finishedAt: _toDateTime(doc.data()['finishedAt']),
+            startLocation: _parseStartLocation(doc.data()['startLocation']),
           ),
         )
         .toList();
@@ -84,6 +87,31 @@ class WalkHistoryListNotifier extends _$WalkHistoryListNotifier {
       return value;
     }
     return null;
+  }
+
+  LatLng? _parseStartLocation(Object? rawLocation) {
+    if (rawLocation is! GeoPoint) {
+      return null;
+    }
+    final lat = rawLocation.latitude;
+    final lon = rawLocation.longitude;
+    if (!_isValidCoordinate(lat, lon)) {
+      return null;
+    }
+    return LatLng(lat, lon);
+  }
+
+  bool _isValidCoordinate(double lat, double lon) {
+    if (!lat.isFinite || !lon.isFinite) {
+      return false;
+    }
+    if (lat < -90 || lat > 90) {
+      return false;
+    }
+    if (lon < -180 || lon > 180) {
+      return false;
+    }
+    return true;
   }
 }
 
