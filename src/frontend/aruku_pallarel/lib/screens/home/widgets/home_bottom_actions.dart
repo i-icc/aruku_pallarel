@@ -20,6 +20,7 @@ class HomeBottomActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const mainButtonHeight = 68.0;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -32,11 +33,11 @@ class HomeBottomActions extends StatelessWidget {
         // Start/Continue Button
         Expanded(
           child: SizedBox(
-            height: 56,
+            height: mainButtonHeight,
             child: AppGradientPillButton(
               label: startWalkLabel,
               isLoading: isStartWalkLoading,
-              height: 56,
+              height: mainButtonHeight,
               onPressed: onStartWalkTap,
             ),
           ),

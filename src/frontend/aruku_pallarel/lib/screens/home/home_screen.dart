@@ -20,6 +20,7 @@ import '../../widgets/app_location_marker.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+import '../../widgets/history_sheet.dart';
 import 'widgets/home_bottom_actions.dart';
 
 @RoutePage()
@@ -265,7 +266,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   child: HomeBottomActions(
                     startWalkLabel: buttonLabel,
                     isStartWalkLoading: _walkLoading,
-                    onHistoryTap: () => context.router.push(const HistoryRoute()),
+                    onHistoryTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const HistorySheet(),
+                      );
+                    },
                     onSettingsTap: () {
                       showModalBottomSheet(
                         context: context,

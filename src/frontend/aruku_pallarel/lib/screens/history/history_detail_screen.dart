@@ -5,13 +5,21 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../features/history/provider/walk_history_provider.dart';
-import '../../theme/app_styles.dart';
-import '../../theme/map_tiles.dart';
+import '../../features/walk/models/walk_suggest.dart';
+import '../../features/walk/provider/walk_suggestion_provider.dart';
+import '../../features/walk/utils/map_utils.dart';
+import '../../screens/chat/chat_screen.dart';
+import '../../router/app_router.dart';
 import '../../theme/map_theme_provider.dart';
+import '../../theme/map_tiles.dart';
 import '../../widgets/app_background.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/app_floating_button.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+import '../walk/widgets/walk_bottom_overlay.dart';
+import '../walk/widgets/walk_info_header.dart';
+import '../walk/widgets/walk_map_layer.dart';
+import '../walk/widgets/walk_suggest_pin.dart';
 
 @RoutePage()
 class HistoryDetailScreen extends ConsumerStatefulWidget {
@@ -33,6 +41,7 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
   LatLngBounds? _pendingBounds;
   LatLng? _pendingCenter;
   bool _didInvalidate = false;
+  String? _selectedSuggestId;
 
   @override
   void didChangeDependencies() {
@@ -88,16 +97,77 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
     return latSpan > epsilon || lonSpan > epsilon;
   }
 
+  WalkHistoryItem? _findHistoryItem(List<WalkHistoryItem>? items) {
+    if (items == null) {
+      return null;
+    }
+    for (final item in items) {
+      if (item.walkId == widget.walkId) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  int? _calculateElapsedMinutes(WalkHistoryItem? item) {
+    final startedAt = item?.startedAt;
+    final finishedAt = item?.finishedAt;
+    if (startedAt == null || finishedAt == null) {
+      return null;
+    }
+    final minutes = finishedAt.difference(startedAt).inMinutes;
+    if (minutes < 0) {
+      return null;
+    }
+    return minutes;
+  }
+
+  List<Marker> _buildSuggestMarkers(List<WalkSuggest> suggests) {
+    return suggests
+        .map(
+          (suggest) => Marker(
+            point: suggest.position,
+            width: 44,
+            height: 44,
+            child: WalkSuggestPin(
+              isSelected: suggest.suggestId == _selectedSuggestId,
+              onTap: () {
+                setState(() {
+                  _selectedSuggestId = suggest.suggestId;
+                });
+              },
+            ),
+          ),
+        )
+        .toList();
+  }
+
+  void _openChat(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          walkIdOverride: widget.walkId,
+          readOnly: true,
+        ),
+      ),
+    );
+  }
+
+  void _backToHome(BuildContext context) {
+    context.router.replaceAll(const [HomeRoute()]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final routeAsync =
         ref.watch(walkHistoryRouteNotifierProvider(widget.walkId));
+    final historyListAsync = ref.watch(walkHistoryListNotifierProvider);
+    final historyItem = _findHistoryItem(historyListAsync.valueOrNull);
     final mapThemeId = ref.watch(mapThemeNotifierProvider);
     final mapTheme = mapThemeId.theme;
+    final suggestsAsync = ref.watch(walkSuggestListProvider(widget.walkId));
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('History Detail'),
-      ),
       body: routeAsync.when(
         data: (points) {
           if (points.isEmpty) {
@@ -108,6 +178,7 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
               ),
             );
           }
+
           final bounds = LatLngBounds.fromPoints(points);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) {
@@ -119,134 +190,108 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
               _applyCenter(points.first);
             }
           });
-          final start = points.first;
-          final end = points.last;
-          return Column(
+
+          final distanceKm = MapUtils.calculateRouteDistanceKm(points);
+          final elapsedMinutes = _calculateElapsedMinutes(historyItem);
+          final center = points.last;
+          final suggestMarkers = suggestsAsync.when(
+            data: _buildSuggestMarkers,
+            loading: () => const <Marker>[],
+            error: (error, stackTrace) => const <Marker>[],
+          );
+          const notices = <Widget>[];
+
+          return Stack(
             children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    FlutterMap(
+              Positioned.fill(
+                child: Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 16,
+                        spreadRadius: 0,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: WalkMapLayer(
                       mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: start,
-                        initialZoom: 15,
-                        onMapReady: () {
-                          _mapReady = true;
-                          final pending = _pendingBounds;
-                          if (pending != null) {
-                            _pendingBounds = null;
-                            _applyBounds(pending);
-                            return;
-                          }
-                          final pendingCenter = _pendingCenter;
-                          if (pendingCenter != null) {
-                            _pendingCenter = null;
-                            _applyCenter(pendingCenter);
-                          }
-                        },
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: mapTheme.urlTemplate,
-                          subdomains: mapTheme.subdomains,
-                          userAgentPackageName: 'com.example.arukuPallarel',
-                        ),
-                        if (points.length > 1)
-                          PolylineLayer(
-                            polylines: [
-                              Polyline(
-                                points: points,
-                                strokeWidth: 4,
-                                color: const Color(0xFF36FF97),
-                              ),
-                            ],
-                          ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: start,
-                              width: 36,
-                              height: 36,
-                              child: const Icon(
-                                Icons.flag,
-                                color: AppColors.success,
-                              ),
-                            ),
-                            Marker(
-                              point: end,
-                              width: 36,
-                              height: 36,
-                              child: const Icon(
-                                Icons.flag,
-                                color: AppColors.danger,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      center: center,
+                      onPositionChanged: (position, hasGesture) {},
+                      onMapReady: () {
+                        _mapReady = true;
+                        final pending = _pendingBounds;
+                        if (pending != null) {
+                          _pendingBounds = null;
+                          _applyBounds(pending);
+                          return;
+                        }
+                        final pendingCenter = _pendingCenter;
+                        if (pendingCenter != null) {
+                          _pendingCenter = null;
+                          _applyCenter(pendingCenter);
+                        }
+                      },
+                      urlTemplate: mapTheme.urlTemplate,
+                      subdomains: mapTheme.subdomains,
+                      routePoints: points,
+                      suggestMarkers: suggestMarkers,
+                      heading: null,
                     ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: SafeArea(
-                        left: false,
-                        bottom: false,
-                        minimum: const EdgeInsets.only(top: 8, right: 8),
-                        child: MapInfoButton(
-                          onTap: () =>
-                              showMapAttributionSheet(context, mapThemeId),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              Container(
-                width: double.infinity,
-                color: AppColors.base,
+              Positioned(
+                left: 16,
+                right: 16,
+                top: 8,
+                child: SafeArea(
+                  bottom: false,
+                  child: WalkInfoHeader(
+                    distanceKm: distanceKm,
+                    elapsedMinutes: elapsedMinutes,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: 24,
                 child: SafeArea(
                   top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Walk ID: ${widget.walkId}',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Points: ${points.length}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 12),
-                        AppCard(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _CoordinateChip(
-                                  label: 'START',
-                                  lat: start.latitude,
-                                  lon: start.longitude,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _CoordinateChip(
-                                  label: 'END',
-                                  lat: end.latitude,
-                                  lon: end.longitude,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: WalkBottomOverlay(
+                    notices: notices,
+                    mainButtonLabel: 'ホームに戻る',
+                    isMainButtonLoading: false,
+                    onMainButtonPressed: () => _backToHome(context),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 28,
+                bottom: 28,
+                child: SafeArea(
+                  top: false,
+                  right: false,
+                  child: AppFloatingButton(
+                    icon: Icons.chat,
+                    onTap: () => _openChat(context),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                top: 0,
+                child: SafeArea(
+                  left: false,
+                  bottom: false,
+                  minimum: const EdgeInsets.only(top: 1, right: 1),
+                  child: MapInfoButton(
+                    onTap: () => showMapAttributionSheet(context, mapThemeId),
                   ),
                 ),
               ),
@@ -264,34 +309,6 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CoordinateChip extends StatelessWidget {
-  const _CoordinateChip({
-    required this.label,
-    required this.lat,
-    required this.lon,
-  });
-
-  final String label;
-  final double lat;
-  final double lon;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: textTheme.labelMedium),
-        const SizedBox(height: 6),
-        Text(
-          '${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}',
-          style: textTheme.bodySmall?.copyWith(color: AppColors.ink),
-        ),
-      ],
     );
   }
 }
