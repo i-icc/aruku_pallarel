@@ -47,15 +47,18 @@ class HomeBottomActions extends StatelessWidget {
             ),
             const SizedBox(width: sideSpacing),
             // Start/Continue Button
-            SizedBox(
-              width: centerWidth,
-              height: mainButtonHeight,
-              child: AppGradientPillButton(
-                label: startWalkLabel,
-                isLoading: isStartWalkLoading,
+            Transform.translate(
+              offset: const Offset(0, 6),
+              child: SizedBox(
+                width: centerWidth,
                 height: mainButtonHeight,
-                fontSize: 22,
-                onPressed: onStartWalkTap,
+                child: AppGradientPillButton(
+                  label: startWalkLabel,
+                  isLoading: isStartWalkLoading,
+                  height: mainButtonHeight,
+                  fontSize: 22,
+                  onPressed: onStartWalkTap,
+                ),
               ),
             ),
             const SizedBox(width: sideSpacing),
