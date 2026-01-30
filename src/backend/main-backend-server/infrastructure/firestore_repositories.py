@@ -8,6 +8,30 @@ from utils.time import ensure_utc
 from firestore_utils import delete_document_recursive
 
 
+def _increment(value: int):
+    if hasattr(firestore, "Increment"):
+        return firestore.Increment(value)
+    if hasattr(firestore, "FieldValue"):
+        return firestore.FieldValue.increment(value)
+    try:
+        from google.cloud.firestore_v1 import Increment
+    except ImportError:
+        from google.cloud.firestore import Increment  # type: ignore[no-redef]
+    return Increment(value)
+
+
+def _array_union(values):
+    if hasattr(firestore, "ArrayUnion"):
+        return firestore.ArrayUnion(values)
+    if hasattr(firestore, "FieldValue"):
+        return firestore.FieldValue.arrayUnion(values)
+    try:
+        from google.cloud.firestore_v1 import ArrayUnion
+    except ImportError:
+        from google.cloud.firestore import ArrayUnion  # type: ignore[no-redef]
+    return ArrayUnion(values)
+
+
 class FirestoreUserRepository:
     def __init__(self, db):
         self._db = db
@@ -146,8 +170,8 @@ class FirestoreWalkRepository:
         for index, payloads in payloads_by_index.items():
             data = {
                 "index": index,
-                "count": firestore.FieldValue.increment(len(payloads)),
-                "points": firestore.FieldValue.arrayUnion(payloads),
+                "count": _increment(len(payloads)),
+                "points": _array_union(payloads),
                 "updatedAt": firestore.SERVER_TIMESTAMP,
             }
             if index not in existing_indices:
