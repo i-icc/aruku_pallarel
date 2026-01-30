@@ -267,6 +267,7 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
                     notices: notices,
                     mainButtonLabel: 'ホームに戻る',
                     isMainButtonLoading: false,
+                    isMainButtonDestructive: true,
                     onMainButtonPressed: () => _backToHome(context),
                   ),
                 ),

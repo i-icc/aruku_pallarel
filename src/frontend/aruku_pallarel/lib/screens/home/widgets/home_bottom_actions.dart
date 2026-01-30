@@ -21,34 +21,53 @@ class HomeBottomActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const mainButtonHeight = 68.0;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        // History Button
-        AppFloatingButton(
-          icon: Icons.history,
-          onTap: onHistoryTap,
-        ),
-        const SizedBox(width: 16),
-        // Start/Continue Button
-        Expanded(
-          child: SizedBox(
-            height: mainButtonHeight,
-            child: AppGradientPillButton(
-              label: startWalkLabel,
-              isLoading: isStartWalkLoading,
-              height: mainButtonHeight,
-              onPressed: onStartWalkTap,
+    const sideButtonSize = 56.0;
+    const sideSpacing = 16.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final maxCenterWidth = (availableWidth -
+                (sideButtonSize * 2) -
+                (sideSpacing * 2))
+            .clamp(0.0, availableWidth)
+            .toDouble();
+        final preferredWidth = availableWidth * 0.55;
+        final centerWidth =
+            preferredWidth < maxCenterWidth ? preferredWidth : maxCenterWidth;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // History Button
+            AppFloatingButton(
+              icon: Icons.history,
+              onTap: onHistoryTap,
+              size: sideButtonSize,
             ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Settings Button
-        AppFloatingButton(
-          icon: Icons.settings,
-          onTap: onSettingsTap,
-        ),
-      ],
+            const SizedBox(width: sideSpacing),
+            // Start/Continue Button
+            SizedBox(
+              width: centerWidth,
+              height: mainButtonHeight,
+              child: AppGradientPillButton(
+                label: startWalkLabel,
+                isLoading: isStartWalkLoading,
+                height: mainButtonHeight,
+                fontSize: 22,
+                onPressed: onStartWalkTap,
+              ),
+            ),
+            const SizedBox(width: sideSpacing),
+            // Settings Button
+            AppFloatingButton(
+              icon: Icons.settings,
+              onTap: onSettingsTap,
+              size: sideButtonSize,
+            ),
+          ],
+        );
+      },
     );
   }
 }

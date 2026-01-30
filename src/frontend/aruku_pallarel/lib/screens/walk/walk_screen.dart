@@ -739,6 +739,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                   notices: notices,
                   mainButtonLabel: mainButtonState.label,
                   isMainButtonLoading: mainButtonState.isLoading,
+                  isMainButtonDestructive: mainButtonState.isDestructive,
                   onMainButtonPressed: mainButtonState.onPressed,
                 ),
             ),
@@ -975,6 +976,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return _MainButtonState(
         label: label,
         isLoading: trackingState.isRequesting,
+        isDestructive: false,
         onPressed: trackingState.isRequesting ? null : _startTracking,
       );
     }
@@ -984,6 +986,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return _MainButtonState(
         label: 'ホームに戻る',
         isLoading: false,
+        isDestructive: true,
         onPressed: () => context.router.pop(),
       );
     }
@@ -992,6 +995,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     return _MainButtonState(
       label: '散歩を終わる',
       isLoading: _finishLoading,
+      isDestructive: true,
       onPressed: _finishLoading
           ? null
           : () {
@@ -1007,14 +1011,15 @@ class _MainButtonState {
   const _MainButtonState({
     required this.label,
     required this.isLoading,
+    required this.isDestructive,
     required this.onPressed,
   });
 
   final String label;
   final bool isLoading;
+  final bool isDestructive;
   final VoidCallback? onPressed;
 }
-
 
 
 

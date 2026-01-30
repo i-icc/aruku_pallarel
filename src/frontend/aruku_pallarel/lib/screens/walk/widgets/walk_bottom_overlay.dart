@@ -9,12 +9,14 @@ class WalkBottomOverlay extends StatelessWidget {
     required this.mainButtonLabel,
     required this.isMainButtonLoading,
     required this.onMainButtonPressed,
+    this.isMainButtonDestructive = false,
   });
 
   final List<Widget> notices;
   final String mainButtonLabel;
   final bool isMainButtonLoading;
   final VoidCallback? onMainButtonPressed;
+  final bool isMainButtonDestructive;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +37,9 @@ class WalkBottomOverlay extends StatelessWidget {
             child: AppGradientPillButton(
               label: mainButtonLabel,
               isLoading: isMainButtonLoading,
+              colors: isMainButtonDestructive
+                  ? AppGradientPillButton.destructiveColors
+                  : null,
               onPressed: onMainButtonPressed,
             ),
           ),

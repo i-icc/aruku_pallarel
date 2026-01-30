@@ -7,17 +7,26 @@ class AppGradientPillButton extends StatelessWidget {
     required this.isLoading,
     required this.onPressed,
     this.height = 68,
+    this.colors,
+    this.fontSize = 20,
   });
 
   final String label;
   final bool isLoading;
   final VoidCallback? onPressed;
   final double height;
+  final List<Color>? colors;
+  final double fontSize;
 
   static const List<Color> _baseColors = [
     Color(0xFFDFFF33),
     Color(0xFF3FFF8B),
     Color(0xFF22FFD9),
+  ];
+  static const List<Color> destructiveColors = [
+    Color(0xFFFF32C2),
+    Color(0xFFFFA83F),
+    Color(0xFFFFF524),
   ];
 
   @override
@@ -25,7 +34,8 @@ class AppGradientPillButton extends StatelessWidget {
     final enabled = onPressed != null && !isLoading;
     final radius = height / 2;
 
-    final outerColors = _baseColors
+    final resolvedColors = colors ?? _baseColors;
+    final outerColors = resolvedColors
         .map(
           (color) => Color.lerp(color, Colors.white, 0.72)!,
         )
@@ -60,8 +70,8 @@ class AppGradientPillButton extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: _baseColors,
-              stops: [0.0, 0.5, 1.0],
+              colors: resolvedColors,
+              stops: const [0.0, 0.5, 1.0],
             ),
           ),
           alignment: Alignment.center,
@@ -76,9 +86,9 @@ class AppGradientPillButton extends StatelessWidget {
                 )
               : Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: fontSize,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -87,5 +97,3 @@ class AppGradientPillButton extends StatelessWidget {
     );
   }
 }
-
-
