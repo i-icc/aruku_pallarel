@@ -20,37 +20,34 @@ class HomeBottomActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // History Button
-          AppFloatingButton(
-            icon: Icons.history,
-            onTap: onHistoryTap,
-          ),
-          const SizedBox(width: 16),
-          // Start/Continue Button
-          Expanded(
-            child: SizedBox(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // History Button
+        AppFloatingButton(
+          icon: Icons.history,
+          onTap: onHistoryTap,
+        ),
+        const SizedBox(width: 16),
+        // Start/Continue Button
+        Expanded(
+          child: SizedBox(
+            height: 56,
+            child: AppGradientPillButton(
+              label: startWalkLabel,
+              isLoading: isStartWalkLoading,
               height: 56,
-              child: AppGradientPillButton(
-                label: startWalkLabel,
-                isLoading: isStartWalkLoading,
-                height: 56,
-                onPressed: onStartWalkTap,
-              ),
+              onPressed: onStartWalkTap,
             ),
           ),
-          const SizedBox(width: 16),
-          // Settings Button
-          AppFloatingButton(
-            icon: Icons.settings,
-            onTap: onSettingsTap,
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 16),
+        // Settings Button
+        AppFloatingButton(
+          icon: Icons.settings,
+          onTap: onSettingsTap,
+        ),
+      ],
     );
   }
 }

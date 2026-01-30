@@ -305,8 +305,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               child: SafeArea(
                 child: AppConfirmDialog(
                   title: '散歩を始めますか？',
-                  description: '位置情報を利用して移動距離を記録します',
-                  confirmLabel: '散歩を始める',
+                  description: '※歩きスマホにご注意ください',
+                  confirmLabel: 'はじめる',
                   cancelLabel: 'もどる',
                   onCancel: () {
                     setState(() {
