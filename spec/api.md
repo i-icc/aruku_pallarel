@@ -7,7 +7,8 @@
 - Content-Type: `application/json`
 - 失敗時は `{ "error": { "code": "...", "message": "..." } }` を返す
 
-> 位置情報の書き込みや履歴の読み取りはクライアントから Firestore へ直接行う（MVP）。
+> 位置情報の書き込みは基本的にクライアントから Firestore へ直接行う（MVP）。
+> iOS のバックグラウンド更新は Locus の同期で Backend 経由に切り替える場合がある。
 
 ---
 
@@ -116,6 +117,52 @@
   "finishedAt": "2025-01-03T10:00:00Z"
 }
 ```
+
+### POST /v1/walks/{walkId}/locations:ingest
+バックグラウンド位置更新の取り込み（主に iOS）。
+
+#### Request
+- `location` または `locations` のどちらかを送る
+- `coords.latitude` / `coords.longitude` を使用する
+- `timestamp` は ISO 8601（省略時はサーバー時刻）
+
+```json
+{
+  "location": {
+    "timestamp": "2025-01-03T09:20:00Z",
+    "coords": {
+      "latitude": 35.0,
+      "longitude": 139.0,
+      "accuracy": 12.3
+    }
+  }
+}
+```
+
+```json
+{
+  "locations": [
+    {
+      "timestamp": "2025-01-03T09:20:00Z",
+      "coords": { "latitude": 35.0, "longitude": 139.0 }
+    }
+  ]
+}
+```
+
+#### Response
+```json
+{
+  "result": "ok",
+  "storedCount": 1,
+  "suggestion": {
+    "result": "ok",
+    "requestId": "01JABCDEFG..."
+  }
+}
+```
+
+`result: ignored` の場合は walk が inactive で保存しない。
 
 ### POST /v1/walks/{walkId}/suggestions:request
 提案生成のリクエスト（非同期）。

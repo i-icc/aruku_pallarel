@@ -86,7 +86,8 @@ flowchart TB
 - WHEN:
   - Locus で位置情報の更新を受信（distanceFilter: 15m）
 - THEN:
-  - Firestore に位置情報が追記される
+  - フォアグラウンド: Firestore に位置情報が追記される
+  - iOS バックグラウンド: Backend 取り込み経由で Firestore に反映され、条件が満たされれば提案リクエストが発行される
   - 位置情報権限がない場合は許可の案内と設定画面への導線を表示する
 
 > **バックグラウンド動作**

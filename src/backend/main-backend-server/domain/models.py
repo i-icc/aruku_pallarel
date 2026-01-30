@@ -47,3 +47,11 @@ class SuggestionRequestResult:
     result: str
     request_id: str | None
     reason: str | None
+
+
+@dataclass(frozen=True)
+class LocationIngestResult:
+    result: str
+    stored_count: int
+    suggestion: SuggestionRequestResult | None
+    reason: str | None

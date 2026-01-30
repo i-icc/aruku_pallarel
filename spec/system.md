@@ -53,7 +53,7 @@ flowchart TB
 - Firebase Auth: ID トークン発行/検証
 - Firestore: walk/位置/提案/チャット/requests の永続化
 - FCM: 提案・更新通知の配信
-- Cloud Run Backend (Python / Flask): walk開始/終了、ユーザー登録/管理、軽量な提案リクエスト受付、データ整形、Cloud Tasks へのジョブ投入
+- Cloud Run Backend (Python / Flask): walk開始/終了、ユーザー登録/管理、位置更新の取り込み、軽量な提案リクエスト受付、データ整形、Cloud Tasks へのジョブ投入
 - Cloud Tasks: 長時間/重い処理のキューイング。suggestion-job の Cloud Run サービスを HTTP ターゲットで起動する
 - Cloud Run Job Service (suggestion-job): 非同期バッチ相当の API を提供し、提案生成・通知送信を実行する
 - Cloud Run ADK: LLM 用の推論サービス。Vertex AI を利用し、バックエンド/ジョブから呼び出される
@@ -72,7 +72,9 @@ flowchart TB
 
 ### 位置更新
 1. App は Locus の位置更新ストリームを購読する（distanceFilter: 15m）
-2. 位置が更新されたときのみ Firestore の `locations` に追記
+2. フォアグラウンドは App から Firestore の `locations` に追記
+3. iOS バックグラウンド時は Locus の同期で Backend の `/locations:ingest` に送信
+4. Backend が Firestore の `locations` に追記し、条件を満たせば提案リクエストを発行
 
 ### 履歴/提案の閲覧
 1. App は Firestore から `walks` / `suggests` / `chat` を読み取る
