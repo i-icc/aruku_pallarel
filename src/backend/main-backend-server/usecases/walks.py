@@ -4,7 +4,13 @@ from typing import Protocol
 from uuid import uuid4
 
 from domain.errors import AppError
-from domain.models import Location, LocationPoint, SuggestionRequestResult, Walk
+from domain.models import (
+    Location,
+    LocationIngestResult,
+    LocationPoint,
+    SuggestionRequestResult,
+    Walk,
+)
 from utils.geo import haversine_distance_m
 from utils.time import ensure_utc
 
@@ -22,6 +28,15 @@ class WalkRepository(Protocol):
         raise NotImplementedError
 
     def get_location_points(self, user_id: str, walk_id: str) -> list[LocationPoint]:
+        raise NotImplementedError
+
+    def append_location_points(
+        self,
+        user_id: str,
+        walk_id: str,
+        points: list[LocationPoint],
+        max_batch_size: int = 64,
+    ) -> int:
         raise NotImplementedError
 
 
@@ -164,6 +179,63 @@ def request_suggestion(
         points_used,
     )
     return SuggestionRequestResult(result="ok", request_id=request_id, reason=None)
+
+
+def ingest_locations(
+    repo: WalkRepository,
+    requests_repo: SuggestionRequestRepository,
+    tasks_queue: TasksQueue,
+    user_id: str,
+    walk_id: str,
+    points: list[LocationPoint],
+    now: datetime,
+    cooldown_minutes: int = 5,
+    min_distance_meters: float = 250.0,
+    max_batch_size: int = 64,
+) -> LocationIngestResult:
+    data = repo.get_walk(user_id, walk_id)
+    if data is None:
+        raise AppError("WALK_NOT_FOUND", "Walk not found", 404)
+
+    if data.get("status") != "active":
+        logger.info(
+            "location_ingest_ignored reason=walk_inactive user_id=%s walk_id=%s status=%s",
+            user_id,
+            walk_id,
+            data.get("status"),
+        )
+        return LocationIngestResult(
+            result="ignored",
+            stored_count=0,
+            suggestion=None,
+            reason="walk_inactive",
+        )
+
+    stored_count = repo.append_location_points(
+        user_id,
+        walk_id,
+        points,
+        max_batch_size=max_batch_size,
+    )
+    suggestion = None
+    if stored_count > 0:
+        suggestion = request_suggestion(
+            repo,
+            requests_repo,
+            tasks_queue,
+            user_id,
+            walk_id,
+            now,
+            cooldown_minutes=cooldown_minutes,
+            min_distance_meters=min_distance_meters,
+        )
+
+    return LocationIngestResult(
+        result="ok",
+        stored_count=stored_count,
+        suggestion=suggestion,
+        reason=None,
+    )
 
 
 def _distance_since(
