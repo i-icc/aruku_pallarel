@@ -8,6 +8,7 @@ import 'features/share/services/fcm_messaging.dart';
 import 'features/share/provider/overlay_loading_provider.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme_provider.dart';
+import 'widgets/app_transition_loading_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,15 +49,30 @@ class MyApp extends HookConsumerWidget {
       theme: theme,
       routerConfig: appRouter.config(),
       builder: (context, router) {
-        if (!isLoading) {
-          return router!;
-        }
         return Stack(
           children: [
             router!,
-            const ColoredBox(
-              color: Color(0x66000000),
-              child: Center(child: CircularProgressIndicator()),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 360),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final slide = Tween<Offset>(
+                  begin: const Offset(0, 0.06),
+                  end: Offset.zero,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(position: slide, child: child),
+                );
+              },
+              child: isLoading
+                  ? const AppTransitionLoadingOverlay(
+                      key: ValueKey('transition-loading'),
+                    )
+                  : const SizedBox(
+                      key: ValueKey('transition-loading-empty'),
+                    ),
             ),
           ],
         );

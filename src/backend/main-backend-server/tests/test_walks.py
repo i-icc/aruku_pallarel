@@ -120,6 +120,96 @@ def test_walks_finish_requires_existing_walk(client, fake_firestore, monkeypatch
     assert response.json["error"]["code"] == "WALK_NOT_FOUND"
 
 
+def test_walks_locations_ingest_stores_points(client, fake_firestore, monkeypatch):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123", "email": "test@example.com"},
+    )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    calls = []
+
+    class FakeQueue:
+        def enqueue_suggestion(self, payload):
+            calls.append(payload)
+            return True
+
+    monkeypatch.setattr(walks_api, "_tasks_queue", lambda: FakeQueue())
+
+    fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
+        "status": "active",
+        "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+        "startLocation": firestore.GeoPoint(35.0, 139.0),
+    }
+
+    response = client.post(
+        "/v1/walks/walk-1/locations:ingest",
+        json={
+            "location": {
+                "timestamp": "2026-01-12T00:00:00Z",
+                "coords": {"latitude": 35.003, "longitude": 139.0},
+            }
+        },
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["result"] == "ok"
+    assert response.json["storedCount"] == 1
+    assert response.json["suggestion"]["result"] == "ok"
+    assert response.json["suggestion"]["requestId"]
+    assert calls
+
+    stored = fake_firestore._store[
+        ("users", "user-123", "walks", "walk-1", "locations", "1")
+    ]
+    assert stored["count"] == 1
+    assert stored["points"]
+    stored_geo = stored["points"][0]["geo"]
+    assert stored_geo.latitude == 35.003
+    assert stored_geo.longitude == 139.0
+
+
+def test_walks_locations_ingest_ignored_when_inactive(
+    client, fake_firestore, monkeypatch
+):
+    monkeypatch.setattr(
+        firebase_client,
+        "verify_id_token",
+        lambda token: {"uid": "user-123", "email": "test@example.com"},
+    )
+    monkeypatch.setattr(
+        firebase_client,
+        "get_firestore_client",
+        lambda: fake_firestore,
+    )
+
+    fake_firestore._store[("users", "user-123", "walks", "walk-1")] = {
+        "status": "finished",
+        "startedAt": datetime(2026, 1, 12, tzinfo=timezone.utc),
+    }
+
+    response = client.post(
+        "/v1/walks/walk-1/locations:ingest",
+        json={
+            "location": {
+                "timestamp": "2026-01-12T00:00:00Z",
+                "coords": {"latitude": 35.003, "longitude": 139.0},
+            }
+        },
+        headers=auth_header(),
+    )
+
+    assert response.status_code == 200
+    assert response.json["result"] == "ignored"
+    assert response.json["storedCount"] == 0
+
+
 def test_walks_suggestions_request_enqueues(client, fake_firestore, monkeypatch):
     monkeypatch.setattr(
         firebase_client,

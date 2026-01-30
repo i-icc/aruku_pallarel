@@ -93,6 +93,69 @@ class FirestoreWalkRepository:
             merge=True,
         )
 
+    def append_location_points(
+        self, user_id, walk_id, points, max_batch_size=64
+    ):
+        if not points:
+            return 0
+
+        locations_ref = (
+            self._walks_ref(user_id).document(walk_id).collection("locations")
+        )
+        snapshots = list(locations_ref.stream())
+
+        counts = {}
+        existing_indices = set()
+        for snapshot in snapshots:
+            data = snapshot.to_dict() or {}
+            index_value = data.get("index")
+            index = (
+                index_value
+                if isinstance(index_value, int)
+                else int(snapshot.id) if snapshot.id.isdigit() else 0
+            )
+            if index <= 0:
+                continue
+            count_value = data.get("count")
+            if isinstance(count_value, int):
+                count = count_value
+            else:
+                points_list = data.get("points", [])
+                count = len(points_list) if isinstance(points_list, list) else 0
+            counts[index] = count
+            existing_indices.add(index)
+
+        current_index = max(existing_indices) if existing_indices else 1
+        current_count = counts.get(current_index, 0)
+
+        points_sorted = sorted(points, key=lambda entry: entry.timestamp)
+        payloads_by_index = {}
+        for point in points_sorted:
+            if current_count >= max_batch_size:
+                current_index += 1
+                current_count = counts.get(current_index, 0)
+            payloads_by_index.setdefault(current_index, []).append(
+                {
+                    "timestamp": ensure_utc(point.timestamp),
+                    "geo": firestore.GeoPoint(point.lat, point.lon),
+                }
+            )
+            current_count += 1
+            counts[current_index] = current_count
+
+        for index, payloads in payloads_by_index.items():
+            data = {
+                "index": index,
+                "count": firestore.FieldValue.increment(len(payloads)),
+                "points": firestore.FieldValue.arrayUnion(payloads),
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+            }
+            if index not in existing_indices:
+                data["createdAt"] = firestore.SERVER_TIMESTAMP
+            locations_ref.document(str(index)).set(data, merge=True)
+
+        return len(points_sorted)
+
     def get_location_points(self, user_id, walk_id):
         locations_ref = (
             self._walks_ref(user_id).document(walk_id).collection("locations")

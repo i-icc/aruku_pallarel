@@ -22,19 +22,59 @@ class FakeDocRef:
         self._now = now
 
     def set(self, data, merge=False):
+        existing = self._store.get(self._path, {}) if merge else {}
         resolved = {}
         for key, value in data.items():
-            if value is firestore.SERVER_TIMESTAMP:
-                resolved[key] = self._now
-            else:
-                resolved[key] = value
+            resolved[key] = self._resolve_value(key, value, existing)
 
         if merge and self._path in self._store:
-            merged = dict(self._store[self._path])
+            merged = dict(existing)
             merged.update(resolved)
             self._store[self._path] = merged
         else:
             self._store[self._path] = resolved
+
+    def _resolve_value(self, key, value, existing):
+        if value is firestore.SERVER_TIMESTAMP:
+            return self._now
+
+        if self._is_increment(value):
+            increment_by = self._get_increment_value(value)
+            current = existing.get(key, 0)
+            if not isinstance(current, (int, float)):
+                current = 0
+            return current + (increment_by or 0)
+
+        if self._is_array_union(value):
+            values = self._get_array_union_values(value)
+            current = existing.get(key, [])
+            if not isinstance(current, list):
+                current = []
+            merged = list(current)
+            for item in values:
+                if item not in merged:
+                    merged.append(item)
+            return merged
+
+        return value
+
+    def _is_increment(self, value):
+        return value.__class__.__name__ == "Increment"
+
+    def _is_array_union(self, value):
+        return value.__class__.__name__ == "ArrayUnion"
+
+    def _get_increment_value(self, value):
+        for attr in ("value", "_value", "amount", "_amount"):
+            if hasattr(value, attr):
+                return getattr(value, attr)
+        return None
+
+    def _get_array_union_values(self, value):
+        for attr in ("values", "_values", "value"):
+            if hasattr(value, attr):
+                return list(getattr(value, attr))
+        return []
 
     def get(self):
         data = self._store.get(self._path)
