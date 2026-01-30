@@ -14,7 +14,7 @@ class HomeBottomActions extends StatelessWidget {
 
   final VoidCallback onHistoryTap;
   final VoidCallback onSettingsTap;
-  final VoidCallback onStartWalkTap;
+  final VoidCallback? onStartWalkTap;
   final String startWalkLabel;
   final bool isStartWalkLoading;
 
@@ -52,13 +52,13 @@ class HomeBottomActions extends StatelessWidget {
               child: SizedBox(
                 width: centerWidth,
                 height: mainButtonHeight,
-                child: AppGradientPillButton(
-                  label: startWalkLabel,
-                  isLoading: isStartWalkLoading,
-                  height: mainButtonHeight,
-                  fontSize: 22,
-                  onPressed: onStartWalkTap,
-                ),
+              child: AppGradientPillButton(
+                label: startWalkLabel,
+                isLoading: isStartWalkLoading,
+                height: mainButtonHeight,
+                fontSize: 22,
+                onPressed: onStartWalkTap,
+              ),
               ),
             ),
             const SizedBox(width: sideSpacing),

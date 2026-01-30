@@ -20,6 +20,7 @@ import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
+import '../../features/share/provider/overlay_loading_provider.dart';
 import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
@@ -153,6 +154,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     setState(() {
       _finishLoading = true;
     });
+    ref.read(overlayLoadingProvider.notifier).state = true;
 
     try {
       await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
@@ -172,6 +174,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         SnackBar(content: Text(error.message)),
       );
     } finally {
+      ref.read(overlayLoadingProvider.notifier).state = false;
       if (mounted) {
         setState(() {
           _finishLoading = false;
@@ -994,7 +997,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     // 散歩中の場合
     return _MainButtonState(
       label: '散歩を終わる',
-      isLoading: _finishLoading,
+      isLoading: false,
       isDestructive: true,
       onPressed: _finishLoading
           ? null
@@ -1020,6 +1023,5 @@ class _MainButtonState {
   final bool isDestructive;
   final VoidCallback? onPressed;
 }
-
 
 
