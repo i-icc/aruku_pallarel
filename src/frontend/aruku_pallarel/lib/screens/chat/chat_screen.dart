@@ -14,7 +14,14 @@ import '../../widgets/app_background.dart';
 
 @RoutePage()
 class ChatScreen extends HookConsumerWidget {
-  const ChatScreen({super.key});
+  const ChatScreen({
+    super.key,
+    this.walkIdOverride,
+    this.readOnly = false,
+  });
+
+  final String? walkIdOverride;
+  final bool readOnly;
 
   static final _urlRegex = RegExp(
     r'https?://[^\s<>\[\]{}|\\^`"]+',
@@ -29,13 +36,18 @@ class ChatScreen extends HookConsumerWidget {
     final messageKeys = useRef<Map<String, GlobalKey>>({});
 
     final activeWalk = ref.watch(activeWalkNotifierProvider);
-    final walkId = activeWalk?.walkId ?? '';
+    final walkId = walkIdOverride ?? activeWalk?.walkId ?? '';
+    final isReadOnly = readOnly || walkIdOverride != null;
     final messagesAsync = walkId.isEmpty
         ? const AsyncValue.data(<WalkChatMessage>[])
         : ref.watch(walkChatMessagesProvider(walkId));
-    final selectedState = ref.watch(selectedSuggestNotifierProvider);
-    final selectedSuggestId =
-        selectedState.walkId == walkId ? selectedState.suggestId : null;
+    final selectedState =
+        isReadOnly ? null : ref.watch(selectedSuggestNotifierProvider);
+    final selectedSuggestId = isReadOnly
+        ? null
+        : selectedState?.walkId == walkId
+            ? selectedState?.suggestId
+            : null;
 
     useEffect(() {
       void onScroll() {
@@ -150,8 +162,12 @@ class ChatScreen extends HookConsumerWidget {
                       data: (messages) {
                         if (messages.isEmpty) {
                           return buildEmptyState(
-                            title: 'No suggestions yet',
-                            subtitle: 'Keep walking to receive new ideas.',
+                            title: isReadOnly
+                                ? 'No suggestions in this walk'
+                                : 'No suggestions yet',
+                            subtitle: isReadOnly
+                                ? 'Try another walk history.'
+                                : 'Keep walking to receive new ideas.',
                           );
                         }
 
@@ -174,7 +190,7 @@ class ChatScreen extends HookConsumerWidget {
                               key: keyForMessage(message),
                               message: message,
                               isSelected: isSelected,
-                              onTap: message.suggestId == null
+                              onTap: isReadOnly || message.suggestId == null
                                   ? null
                                   : () {
                                       ref
@@ -208,9 +224,11 @@ class ChatScreen extends HookConsumerWidget {
                     ),
             ),
             _ChatFooter(
-              text: walkId.isEmpty
-                  ? 'Suggestions appear after you start a walk.'
-                  : 'Suggestions will appear automatically while you walk.',
+              text: isReadOnly
+                  ? '過去の散歩の提案を閲覧しています。'
+                  : walkId.isEmpty
+                      ? 'Suggestions appear after you start a walk.'
+                      : 'Suggestions will appear automatically while you walk.',
             ),
           ],
         ),

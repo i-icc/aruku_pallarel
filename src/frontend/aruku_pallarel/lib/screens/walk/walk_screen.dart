@@ -20,6 +20,7 @@ import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
+import '../../features/share/provider/overlay_loading_provider.dart';
 import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
 import '../../theme/map_theme_provider.dart';
@@ -153,6 +154,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     setState(() {
       _finishLoading = true;
     });
+    ref.read(overlayLoadingProvider.notifier).state = true;
 
     try {
       await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
@@ -172,6 +174,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         SnackBar(content: Text(error.message)),
       );
     } finally {
+      ref.read(overlayLoadingProvider.notifier).state = false;
       if (mounted) {
         setState(() {
           _finishLoading = false;
@@ -739,6 +742,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                   notices: notices,
                   mainButtonLabel: mainButtonState.label,
                   isMainButtonLoading: mainButtonState.isLoading,
+                  isMainButtonDestructive: mainButtonState.isDestructive,
                   onMainButtonPressed: mainButtonState.onPressed,
                 ),
             ),
@@ -975,6 +979,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return _MainButtonState(
         label: label,
         isLoading: trackingState.isRequesting,
+        isDestructive: false,
         onPressed: trackingState.isRequesting ? null : _startTracking,
       );
     }
@@ -984,6 +989,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return _MainButtonState(
         label: 'ホームに戻る',
         isLoading: false,
+        isDestructive: true,
         onPressed: () => context.router.pop(),
       );
     }
@@ -991,7 +997,8 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     // 散歩中の場合
     return _MainButtonState(
       label: '散歩を終わる',
-      isLoading: _finishLoading,
+      isLoading: false,
+      isDestructive: true,
       onPressed: _finishLoading
           ? null
           : () {
@@ -1007,14 +1014,14 @@ class _MainButtonState {
   const _MainButtonState({
     required this.label,
     required this.isLoading,
+    required this.isDestructive,
     required this.onPressed,
   });
 
   final String label;
   final bool isLoading;
+  final bool isDestructive;
   final VoidCallback? onPressed;
 }
-
-
 
 

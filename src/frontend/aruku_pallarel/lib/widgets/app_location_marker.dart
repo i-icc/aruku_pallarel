@@ -63,26 +63,6 @@ class _AppLocationMarkerState extends State<AppLocationMarker>
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // 足元にごく薄い影だけを落とす（本体は暗くしない）
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Container(
-                  width: 70,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(40),
-                    color: Colors.transparent,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.24),
-                        blurRadius: 18,
-                        spreadRadius: 1,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               Container(
                 width: ringSize,
                 height: ringSize,

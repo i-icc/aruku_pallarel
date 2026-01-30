@@ -11,6 +11,7 @@ import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
 import '../../features/share/services/backend_exception.dart';
+import '../../features/share/provider/overlay_loading_provider.dart';
 import '../../router/app_router.dart';
 
 import '../../theme/map_tiles.dart';
@@ -20,6 +21,7 @@ import '../../widgets/app_location_marker.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
+import '../../widgets/history_sheet.dart';
 import 'widgets/home_bottom_actions.dart';
 
 @RoutePage()
@@ -108,6 +110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     setState(() {
       _walkLoading = true;
     });
+    ref.read(overlayLoadingProvider.notifier).state = true;
 
     final trackingNotifier = ref.read(walkTrackingNotifierProvider.notifier);
     final wasTracking = ref.read(walkTrackingNotifierProvider).isTracking;
@@ -159,7 +162,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       
       if (!mounted) return;
       navigated = true;
-      await context.router.push(const WalkRoute());
+      unawaited(context.router.push(const WalkRoute()));
 
     } on BackendException catch (error) {
        if (!mounted) return;
@@ -173,6 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting walk: $e')));
        }
     } finally {
+        ref.read(overlayLoadingProvider.notifier).state = false;
         if (mounted) {
             setState(() {
                 _walkLoading = false;
@@ -264,8 +268,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                   child: HomeBottomActions(
                     startWalkLabel: buttonLabel,
-                    isStartWalkLoading: _walkLoading,
-                    onHistoryTap: () => context.router.push(const HistoryRoute()),
+                    isStartWalkLoading: false,
+                    onHistoryTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const HistorySheet(),
+                      );
+                    },
                     onSettingsTap: () {
                       showModalBottomSheet(
                         context: context,
@@ -274,15 +285,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         builder: (_) => const SettingsSheet(),
                       );
                     },
-                    onStartWalkTap: () {
-                      if (activeWalk != null) {
-                        context.router.push(const WalkRoute());
-                        return;
-                      }
-                      setState(() {
-                        _showStartConfirm = true;
-                      });
-                    },
+                    onStartWalkTap: _walkLoading
+                        ? null
+                        : () {
+                            if (activeWalk != null) {
+                              context.router.push(const WalkRoute());
+                              return;
+                            }
+                            setState(() {
+                              _showStartConfirm = true;
+                            });
+                          },
                   ),
               ),
             ),
