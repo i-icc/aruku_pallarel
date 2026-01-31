@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
@@ -9,6 +10,7 @@ import 'package:locus/locus.dart' as locus;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import 'location_spoof_provider.dart';
+import 'walk_tracking_provider.dart';
 import '../infrastructure/walk_api.dart';
 import '../../share/services/backend_exception.dart';
 
@@ -337,6 +339,10 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
     if (!state.isRecording || _walkId == null || _userId == null) {
       return null;
     }
+    if (Platform.isIOS &&
+        ref.read(walkTrackingNotifierProvider).backgroundSyncEnabled) {
+      return _peekStoredLocations(limit: limit);
+    }
     try {
       final stored = await locus.Locus.location.getLocations(limit: limit);
       if (stored.isEmpty) {
@@ -386,6 +392,37 @@ class WalkLocationRecorderNotifier extends _$WalkLocationRecorderNotifier {
       return LatLng(last.latitude, last.longitude);
     } catch (error) {
       state = state.copyWith(errorMessage: error.toString());
+      return null;
+    }
+  }
+
+  Future<LatLng?> _peekStoredLocations({required int limit}) async {
+    try {
+      final stored = await locus.Locus.location.getLocations(limit: limit);
+      if (stored.isEmpty) {
+        return null;
+      }
+      final points = <_LocationPoint>[];
+      for (final location in stored) {
+        final coords = location.coords;
+        if (!coords.isValid) {
+          continue;
+        }
+        points.add(
+          _LocationPoint(
+            timestamp: location.timestamp,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          ),
+        );
+      }
+      if (points.isEmpty) {
+        return null;
+      }
+      points.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      final last = points.last;
+      return LatLng(last.latitude, last.longitude);
+    } catch (_) {
       return null;
     }
   }

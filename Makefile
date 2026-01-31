@@ -28,6 +28,12 @@ flutter-run:
 flutter-clean:
 	cd src/frontend/aruku_pallarel && fvm flutter clean
 
+flutter-pod-install:
+	cd src/frontend/aruku_pallarel/ios && pod install
+
+flutter-open:
+	open src/frontend/aruku_pallarel/ios/Runner.xcworkspace
+
 OSRM_DATA_DIR ?= $(CURDIR)/tmp/osrm
 OSRM_BASENAME ?= tokyo
 OSRM_PBF_URL ?= https://download.bbbike.org/osm/bbbike/Tokyo/Tokyo.osm.pbf

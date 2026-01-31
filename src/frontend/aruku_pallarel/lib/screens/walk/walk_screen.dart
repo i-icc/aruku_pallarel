@@ -157,22 +157,54 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     ref.read(overlayLoadingProvider.notifier).state = true;
 
     try {
-      await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
-      await ref
-          .read(walkLocationRecorderNotifierProvider.notifier)
-          .stopRecording();
-      await ref.read(walkTrackingNotifierProvider.notifier).stopTracking();
+      try {
+        await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
+      } on BackendException catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+        return;
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('散歩の終了に失敗しました: $error')),
+        );
+        return;
+      }
+
+      final cleanupErrors = <String>[];
+      try {
+        await ref
+            .read(walkLocationRecorderNotifierProvider.notifier)
+            .stopRecording();
+      } catch (error) {
+        debugPrint('stopRecording failed: $error');
+        cleanupErrors.add('位置記録の停止');
+      }
+      try {
+        await ref.read(walkTrackingNotifierProvider.notifier).stopTracking();
+      } catch (error) {
+        debugPrint('stopTracking failed: $error');
+        cleanupErrors.add('位置追跡の停止');
+      }
       if (!mounted) {
         return;
+      }
+      if (cleanupErrors.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '散歩は終了しましたが、${cleanupErrors.join('、')}に失敗しました。',
+            ),
+          ),
+        );
       }
       context.router.pop();
-    } on BackendException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
     } finally {
       ref.read(overlayLoadingProvider.notifier).state = false;
       if (mounted) {
@@ -209,8 +241,9 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       return;
     }
 
-    final granted =
-        await ref.read(walkTrackingNotifierProvider.notifier).startTracking();
+    final granted = await ref
+        .read(walkTrackingNotifierProvider.notifier)
+        .startTracking(walkId: activeWalk.walkId);
     await ref.read(walkTrackingNotifierProvider.notifier).refreshDebugState();
     if (!granted) {
       if (mounted) {
@@ -1023,5 +1056,3 @@ class _MainButtonState {
   final bool isDestructive;
   final VoidCallback? onPressed;
 }
-
-
