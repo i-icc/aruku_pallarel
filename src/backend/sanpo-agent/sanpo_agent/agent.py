@@ -2,7 +2,7 @@ from google.adk.agents.llm_agent import Agent
 # from google.adk.tools import google_search
 
 root_agent = Agent(
-    model="gemini-2.5-flash",
+    model="gemini-3-flash-preview",
     name="root_agent",
     description="Generates a walk suggestion based on nearby landmarks or terrain.",
     # tools=[google_search],
