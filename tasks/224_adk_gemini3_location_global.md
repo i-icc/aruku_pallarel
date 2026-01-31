@@ -3,6 +3,7 @@
 ## 背景
 - ADK で `gemini-3-flash-preview` を使用したいが 404（model not found）が発生
 - Vertex AI で Gemini 3 preview を使うには location=global が必要
+- https://github.com/google/adk-python/issues/3628
 
 ## 目的
 - ADK の `GOOGLE_CLOUD_LOCATION` を `global` に変更し、Gemini 3 preview を利用可能にする
