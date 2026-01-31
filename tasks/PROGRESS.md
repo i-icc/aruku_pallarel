@@ -130,6 +130,7 @@
 - 112: Firestore FieldValue 未定義で ingest が落ちる問題
 - 221: iOS バックグラウンド位置更新のバックエンド取り込み
 - 222: iOS バックグラウンド位置更新のフロント同期対応
+- 224: ADK の Gemini 3 利用で region=global に切り替える
 - 092: Cloud Tasks から Cloud Run Job を直接起動する
 - 102: map info の場所を整える
 

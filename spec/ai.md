@@ -1,7 +1,8 @@
 # エージェント設計（ADK / LLM）
 
 ## 使用モデル
-- Gemini 2.5 Flash（Google AI / Vertex AI）
+- Gemini 3 Flash Preview（Google AI / Vertex AI）
+- Vertex AI で Gemini 3 preview を使う場合は `GOOGLE_CLOUD_LOCATION=global` を前提とする
 
 ## 目的
 - 未踏地点の体験を言語化し、散歩後の余韻をつくる
