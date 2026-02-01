@@ -1,12 +1,10 @@
-import 'dart:async';
 import 'dart:io';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:locus/locus.dart' as locus;
+import 'package:location/location.dart';
 import 'package:permission_handler/permission_handler.dart' as permission;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../../env/env.dart';
+import '../services/location_service.dart';
 
 part 'walk_tracking_provider.g.dart';
 
@@ -74,26 +72,14 @@ class WalkTrackingState {
 @Riverpod(keepAlive: true)
 class WalkTrackingNotifier extends _$WalkTrackingNotifier {
   static const double _distanceFilterMeters = 15;
-  static const int _syncMaxBatchSize = 50;
-  static const int _syncThreshold = 10;
-  bool _ready = false;
-  StreamSubscription<User?>? _tokenSubscription;
-  String? _syncWalkId;
-  String? _lastSyncToken;
 
   @override
   WalkTrackingState build() {
-    ref.onDispose(() {
-      _tokenSubscription?.cancel();
-    });
     return const WalkTrackingState();
   }
 
-  Future<bool> startTracking({String? walkId}) async {
+  Future<bool> startTracking() async {
     if (state.isTracking) {
-      if (walkId != null && walkId.isNotEmpty) {
-        await _configureBackgroundSync(walkId);
-      }
       return true;
     }
 
@@ -111,37 +97,35 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         return false;
       }
 
-      if (!_ready) {
-        await locus.Locus.ready(
-          locus.ConfigPresets.balanced.copyWith(
-            distanceFilter: _distanceFilterMeters,
-            autoSync: false,
-            batchSync: false,
-            stopOnTerminate: false,
-            enableHeadless: true,
-            persistMode: locus.PersistMode.location,
-            maxDaysToPersist: 7,
-            maxRecordsToPersist: 200,
-            notification: const locus.NotificationConfig(
-              title: 'Walk tracking',
-              text: 'Tracking location in the background',
-            ),
-          ),
+      final locationService = ref.read(locationServiceProvider);
+      final serviceEnabled = await locationService.ensureServiceEnabled();
+      if (!serviceEnabled) {
+        state = state.copyWith(
+          permissionGranted: true,
+          isTracking: false,
+          isRequesting: false,
+          serviceEnabled: false,
         );
-        _ready = true;
+        await _refreshDebugState();
+        return false;
       }
 
-      await locus.Locus.start();
+      await locationService.configure(
+        distanceFilterMeters: _distanceFilterMeters,
+        accuracy: LocationAccuracy.balanced,
+      );
+      var backgroundEnabled = false;
+      if (Platform.isIOS) {
+        backgroundEnabled =
+            await locationService.enableBackgroundMode(enable: true);
+      }
+
       state = state.copyWith(
         permissionGranted: true,
         isTracking: true,
         isRequesting: false,
+        backgroundSyncEnabled: backgroundEnabled,
       );
-      if (walkId != null && walkId.isNotEmpty) {
-        await _configureBackgroundSync(walkId);
-      } else {
-        state = state.copyWith(backgroundSyncEnabled: false);
-      }
       await _refreshDebugState();
       return true;
     } catch (error) {
@@ -163,21 +147,14 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
     try {
       if (Platform.isIOS) {
         try {
-          await locus.Locus.dataSync.pause();
+          await ref
+              .read(locationServiceProvider)
+              .enableBackgroundMode(enable: false);
         } catch (error) {
-          errorMessage ??= 'dataSync pause failed: $error';
+          errorMessage ??= 'background mode stop failed: $error';
         }
       }
-      try {
-        await locus.Locus.stop();
-      } catch (error) {
-        errorMessage ??= 'stop failed: $error';
-      }
     } finally {
-      _syncWalkId = null;
-      _lastSyncToken = null;
-      await _tokenSubscription?.cancel();
-      _tokenSubscription = null;
       state = state.copyWith(
         isTracking: false,
         backgroundSyncEnabled: false,
@@ -214,23 +191,22 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
 
   Future<void> _refreshDebugState() async {
     try {
-      final serviceStatus = await permission.Permission.location.serviceStatus;
-      final serviceEnabled =
-          serviceStatus == permission.ServiceStatus.enabled;
-      final debug = await locus.Locus.getState();
-      final location = debug.location;
-      final hasLocation = location != null && location.coords.isValid;
+      final locationService = ref.read(locationServiceProvider);
+      final serviceEnabled = await locationService.isServiceEnabled();
+      final status = await locationService.permissionStatus();
+      final location = locationService.lastLocation;
+      final lat = location?.latitude;
+      final lon = location?.longitude;
+      final hasLocation = lat != null && lon != null;
       final locationText = hasLocation
-          ? '${location.coords.latitude.toStringAsFixed(5)},'
-              '${location.coords.longitude.toStringAsFixed(5)}'
+          ? '${lat.toStringAsFixed(5)},${lon.toStringAsFixed(5)}'
           : null;
       state = state.copyWith(
         debugState: 'service=${serviceEnabled ? 'on' : 'off'}, '
-            'enabled=${debug.enabled}, '
-            'isMoving=${debug.isMoving}, '
+            'permission=$status, '
             'location=${locationText ?? 'none'}',
         serviceEnabled: serviceEnabled,
-        isMoving: debug.isMoving,
+        isMoving: null,
         hasLocation: hasLocation,
         locationText: locationText,
       );
@@ -245,74 +221,4 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
     }
   }
 
-  Future<void> _configureBackgroundSync(String walkId) async {
-    if (!Platform.isIOS) {
-      state = state.copyWith(backgroundSyncEnabled: false);
-      return;
-    }
-    _syncWalkId = walkId;
-    await _applySyncConfig(force: true);
-    _startTokenListener();
-    await locus.Locus.dataSync.resume();
-    state = state.copyWith(backgroundSyncEnabled: true);
-  }
-
-  void _startTokenListener() {
-    if (_tokenSubscription != null) {
-      return;
-    }
-    _tokenSubscription =
-        FirebaseAuth.instance.idTokenChanges().listen((_) async {
-      if (_syncWalkId == null) {
-        return;
-      }
-      await _applySyncConfig();
-      await locus.Locus.dataSync.resume();
-    });
-  }
-
-  Future<void> _applySyncConfig({bool force = false}) async {
-    final walkId = _syncWalkId;
-    if (walkId == null || walkId.isEmpty) {
-      return;
-    }
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return;
-    }
-    String? token;
-    try {
-      token = await user.getIdToken();
-    } catch (_) {
-      return;
-    }
-    if (token == null || token.isEmpty) {
-      return;
-    }
-    if (!force && token == _lastSyncToken) {
-      return;
-    }
-    _lastSyncToken = token;
-    final ingestUrl = _buildIngestUrl(walkId);
-    await locus.Locus.setConfig(
-      locus.Config(
-        url: ingestUrl,
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-        autoSync: true,
-        batchSync: true,
-        maxBatchSize: _syncMaxBatchSize,
-        autoSyncThreshold: _syncThreshold,
-      ),
-    );
-  }
-
-  String _buildIngestUrl(String walkId) {
-    final base = Env.backendBaseUrl;
-    final normalized =
-        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-    return '$normalized/v1/walks/$walkId/locations:ingest';
-  }
 }

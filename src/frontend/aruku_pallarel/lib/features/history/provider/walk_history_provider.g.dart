@@ -7,7 +7,7 @@ part of 'walk_history_provider.dart';
 // **************************************************************************
 
 String _$walkHistoryListNotifierHash() =>
-    r'53d7bd1573e146be75024c0b9867283ce110967c';
+    r'f1f370900b4c890c6c0810438ef559878d27a901';
 
 /// See also [WalkHistoryListNotifier].
 @ProviderFor(WalkHistoryListNotifier)
