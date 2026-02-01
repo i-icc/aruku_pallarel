@@ -4,7 +4,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../env/env.dart';
 import '../../features/authentication/provider/user_profile_provider.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../router/app_router.dart';
@@ -22,8 +21,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailController = TextEditingController(text: 'test@example.com');
-  final _passwordController = TextEditingController(text: 'password123');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _nicknameController = TextEditingController();
   bool _isLoading = false;
   String? _error;
@@ -32,12 +31,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     if (Firebase.apps.isNotEmpty) {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          context.router.replaceAll(const [HomeRoute()]);
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          return;
+        }
+        try {
+          final token = await user.getIdToken().timeout(
+                const Duration(seconds: 8),
+              );
+          if (token == null || token.isEmpty) {
+            await FirebaseAuth.instance.signOut();
+            return;
+          }
+        } catch (_) {
+          await FirebaseAuth.instance.signOut();
+          return;
+        }
+        if (!mounted) {
+          return;
+        }
+        context.router.replaceAll(const [HomeRoute()]);
+      });
     }
   }
 
@@ -224,11 +239,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Backend: ${Env.backendBaseUrl}',
-                  style: theme.textTheme.labelMedium,
-                  textAlign: TextAlign.center,
-                ),
               ],
             ),
           ),
