@@ -5,7 +5,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../features/history/provider/walk_history_provider.dart';
+import '../../features/walk/models/walk_chat_message.dart';
 import '../../features/walk/models/walk_suggest.dart';
+import '../../features/walk/provider/walk_chat_provider.dart';
 import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../features/walk/utils/map_utils.dart';
 import '../../screens/chat/chat_screen.dart';
@@ -20,6 +22,7 @@ import '../walk/widgets/walk_bottom_overlay.dart';
 import '../walk/widgets/walk_info_header.dart';
 import '../walk/widgets/walk_map_layer.dart';
 import '../walk/widgets/walk_suggest_pin.dart';
+import '../walk/widgets/walk_suggest_popup.dart';
 
 @RoutePage()
 class HistoryDetailScreen extends ConsumerStatefulWidget {
@@ -142,13 +145,63 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
         .toList();
   }
 
+  WalkSuggest? _findSuggestById(
+    List<WalkSuggest> suggests,
+    String? suggestId,
+  ) {
+    if (suggestId == null) {
+      return null;
+    }
+    for (final suggest in suggests) {
+      if (suggest.suggestId == suggestId) {
+        return suggest;
+      }
+    }
+    return null;
+  }
+
+  WalkChatMessage? _resolveSuggestMessage(
+    String? suggestId,
+    List<WalkChatMessage> messages,
+  ) {
+    if (suggestId == null || suggestId.isEmpty) {
+      return null;
+    }
+    for (final message in messages.reversed) {
+      if (message.suggestId == suggestId) {
+        return message;
+      }
+    }
+    return null;
+  }
+
+  Marker? _buildSuggestPopupMarker({
+    required WalkSuggest? suggest,
+    required WalkChatMessage? message,
+  }) {
+    if (suggest == null || message == null) {
+      return null;
+    }
+    return Marker(
+      point: suggest.position,
+      width: 240,
+      height: 140,
+      alignment: Alignment.topCenter,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: WalkSuggestPopup(message: message.message),
+      ),
+    );
+  }
+
   void _openChat(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          walkIdOverride: widget.walkId,
-          readOnly: true,
-        ),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ChatSheet(
+        walkIdOverride: widget.walkId,
+        readOnly: true,
       ),
     );
   }
@@ -166,6 +219,11 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
     final mapThemeId = ref.watch(mapThemeNotifierProvider);
     final mapTheme = mapThemeId.theme;
     final suggestsAsync = ref.watch(walkSuggestListProvider(widget.walkId));
+    final chatMessagesAsync = ref.watch(walkChatMessagesProvider(widget.walkId));
+    final popupMessage = _resolveSuggestMessage(
+      _selectedSuggestId,
+      chatMessagesAsync.valueOrNull ?? const <WalkChatMessage>[],
+    );
 
     return Scaffold(
       body: routeAsync.when(
@@ -195,7 +253,17 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
           final elapsedMinutes = _calculateElapsedMinutes(historyItem);
           final center = points.last;
           final suggestMarkers = suggestsAsync.when(
-            data: _buildSuggestMarkers,
+            data: (suggests) {
+              final markers = _buildSuggestMarkers(suggests);
+              final popupMarker = _buildSuggestPopupMarker(
+                suggest: _findSuggestById(suggests, _selectedSuggestId),
+                message: popupMessage,
+              );
+              if (popupMarker != null) {
+                markers.add(popupMarker);
+              }
+              return markers;
+            },
             loading: () => const <Marker>[],
             error: (error, stackTrace) => const <Marker>[],
           );
@@ -241,6 +309,14 @@ class _HistoryDetailScreenState extends ConsumerState<HistoryDetailScreen> {
                       routePoints: points,
                       suggestMarkers: suggestMarkers,
                       heading: null,
+                      onMapTap: (tapPosition, point) {
+                        if (_selectedSuggestId == null) {
+                          return;
+                        }
+                        setState(() {
+                          _selectedSuggestId = null;
+                        });
+                      },
                     ),
                   ),
                 ),
