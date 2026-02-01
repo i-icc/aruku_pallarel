@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:locus/locus.dart' as locus;
 
 import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
+import '../../features/walk/services/location_service.dart';
 import '../../features/share/services/backend_exception.dart';
 import '../../features/share/provider/overlay_loading_provider.dart';
 import '../../router/app_router.dart';
@@ -66,15 +66,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     try {
-       // Try getting current position first
-      final current = await locus.LocusLocation.getCurrentPosition(
-        timeout: 5,
-        maximumAge: 60, // Allow 1 minute old cache
-      );
-      final coords = current.coords;
-      if (coords.isValid && mounted) {
+      final service = ref.read(locationServiceProvider);
+      final current =
+          await service.getCurrent(timeout: const Duration(seconds: 5));
+      final lat = current?.latitude;
+      final lon = current?.longitude;
+      if (lat != null && lon != null && mounted) {
         setState(() {
-          _currentCenter = LatLng(coords.latitude, coords.longitude);
+          _currentCenter = LatLng(lat, lon);
         });
         return;
       }
@@ -96,11 +95,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Future<LatLng?> _fetchLastKnownLocation() async {
     try {
-      final state = await locus.Locus.getState();
-      final location = state.location;
-      final coords = location?.coords;
-      if (coords != null && coords.isValid) {
-        return LatLng(coords.latitude, coords.longitude);
+      final location = ref.read(locationServiceProvider).lastLocation;
+      final lat = location?.latitude;
+      final lon = location?.longitude;
+      if (lat != null && lon != null) {
+        return LatLng(lat, lon);
       }
     } catch (_) {}
     return null;
@@ -139,11 +138,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
          try {
              // Added a secondary timeout at the Dart level to prevent native hang from blocking the UI
-             final current = await locus.LocusLocation.getCurrentPosition(timeout: 10)
+             final current = await ref
+                 .read(locationServiceProvider)
+                 .getCurrent(timeout: const Duration(seconds: 10))
                  .timeout(const Duration(seconds: 60));
-             final coords = current.coords;
-             if (coords.isValid) {
-                 startLocation = LatLng(coords.latitude, coords.longitude);
+             final lat = current?.latitude;
+             final lon = current?.longitude;
+             if (lat != null && lon != null) {
+                 startLocation = LatLng(lat, lon);
              }
          } catch (_) {
              startLocation = await _fetchLastKnownLocation();
