@@ -15,6 +15,7 @@ class WalkMapLayer extends StatelessWidget {
     required this.routePoints,
     required this.suggestMarkers,
     required this.heading,
+    this.onMapTap,
     this.onPointerDown,
     this.onPointerMove,
     this.onPointerUp,
@@ -30,6 +31,7 @@ class WalkMapLayer extends StatelessWidget {
   final List<LatLng> routePoints;
   final List<Marker> suggestMarkers;
   final double? heading;
+  final TapCallback? onMapTap;
   final PointerDownEventListener? onPointerDown;
   final PointerMoveEventListener? onPointerMove;
   final PointerUpEventListener? onPointerUp;
@@ -44,43 +46,44 @@ class WalkMapLayer extends StatelessWidget {
       onPointerUp: onPointerUp,
       onPointerCancel: onPointerCancel,
       child: FlutterMap(
-      mapController: mapController,
-      options: MapOptions(
-        initialCenter: center,
-        initialZoom: 16,
-        onPositionChanged: onPositionChanged,
-        onMapReady: onMapReady,
-      ),
-      children: [
-        TileLayer(
-          urlTemplate: urlTemplate,
-          subdomains: subdomains,
-          userAgentPackageName: 'com.example.arukuPallarel',
+        mapController: mapController,
+        options: MapOptions(
+          initialCenter: center,
+          initialZoom: 16,
+          onPositionChanged: onPositionChanged,
+          onMapReady: onMapReady,
+          onTap: onMapTap,
         ),
-        if (routePoints.length > 1)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: routePoints,
-                strokeWidth: 4,
-                color: const Color(0xFF36FF97).withValues(alpha: 0.8),
+        children: [
+          TileLayer(
+            urlTemplate: urlTemplate,
+            subdomains: subdomains,
+            userAgentPackageName: 'com.example.arukuPallarel',
+          ),
+          if (routePoints.length > 1)
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: routePoints,
+                  strokeWidth: 4,
+                  color: const Color(0xFF36FF97).withValues(alpha: 0.8),
+                ),
+              ],
+            ),
+          MarkerLayer(
+            markers: [
+              ...suggestMarkers,
+              Marker(
+                point: center,
+                width: 120,
+                height: 120,
+                child: AppLocationMarker(
+                  heading: heading,
+                ),
               ),
             ],
           ),
-        MarkerLayer(
-          markers: [
-            ...suggestMarkers,
-            Marker(
-              point: center,
-              width: 120,
-              height: 120,
-              child: AppLocationMarker(
-                heading: heading,
-              ),
-            ),
-          ],
-        ),
-      ],
+        ],
       ),
     );
   }

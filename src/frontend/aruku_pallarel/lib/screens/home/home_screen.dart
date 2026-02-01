@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:location/location.dart';
 
 import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
@@ -35,33 +36,62 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with TickerProviderStateMixin {
   static const LatLng _fallbackCenter = LatLng(35.681236, 139.767125);
+  static const double _homeZoom = 16.3;
 
   final MapController _mapController = MapController();
   bool _walkLoading = false;
   LatLng? _currentCenter;
   bool _showStartConfirm = false;
+  bool _mapReady = false;
+  StreamSubscription<LocationData>? _locationSubscription;
+  ProviderSubscription<LocationSpoofState>? _spoofSubscription;
 
 
   @override
   void initState() {
     super.initState();
+    _spoofSubscription = ref.listenManual(
+      locationSpoofNotifierProvider,
+      (previous, next) {
+        if (!mounted) {
+          return;
+        }
+        if (next.enabled) {
+          _stopLocationUpdates();
+          final spoofLocation = next.location;
+          if (spoofLocation != null) {
+            _updateCenter(spoofLocation);
+          }
+          return;
+        }
+        if (previous?.enabled == true && !next.enabled) {
+          unawaited(_startLocationUpdates());
+        }
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
       ref.read(activeWalkNotifierProvider.notifier).loadActiveWalk();
-      _fetchInitialLocation();
+      unawaited(_fetchInitialLocation());
+      unawaited(_startLocationUpdates());
     });
+  }
+
+  @override
+  void dispose() {
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
+    _spoofSubscription?.close();
+    _mapController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchInitialLocation() async {
     final spoofState = ref.read(locationSpoofNotifierProvider);
     if (spoofState.enabled && spoofState.location != null) {
-      if (mounted) {
-        setState(() {
-          _currentCenter = spoofState.location;
-        });
-      }
+      _updateCenter(spoofState.location!);
       return;
     }
 
@@ -71,10 +101,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           await service.getCurrent(timeout: const Duration(seconds: 5));
       final lat = current?.latitude;
       final lon = current?.longitude;
-      if (lat != null && lon != null && mounted) {
-        setState(() {
-          _currentCenter = LatLng(lat, lon);
-        });
+      if (lat != null && lon != null) {
+        _updateCenter(LatLng(lat, lon));
         return;
       }
     } catch (_) {
@@ -82,14 +110,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     final lastKnown = await _fetchLastKnownLocation();
-    if (lastKnown != null && mounted) {
-      setState(() {
-        _currentCenter = lastKnown;
-      });
-    } else if (mounted) {
-       setState(() {
-        _currentCenter = _fallbackCenter;
-      });
+    if (lastKnown != null) {
+      _updateCenter(lastKnown);
+    } else {
+      _updateCenter(_fallbackCenter);
     }
   }
 
@@ -103,6 +127,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
     } catch (_) {}
     return null;
+  }
+
+  Future<void> _startLocationUpdates() async {
+    await _locationSubscription?.cancel();
+    _locationSubscription = null;
+
+    final spoofState = ref.read(locationSpoofNotifierProvider);
+    if (spoofState.enabled) {
+      if (spoofState.location != null) {
+        _updateCenter(spoofState.location!);
+      }
+      return;
+    }
+
+    try {
+      final locationService = ref.read(locationServiceProvider);
+      final permission = await locationService.ensurePermission();
+      if (permission != PermissionStatus.granted &&
+          permission != PermissionStatus.grantedLimited) {
+        return;
+      }
+      final serviceEnabled = await locationService.ensureServiceEnabled();
+      if (!serviceEnabled) {
+        return;
+      }
+      await locationService.configure(
+        distanceFilterMeters: 15,
+        accuracy: LocationAccuracy.balanced,
+      );
+      _locationSubscription = locationService.stream.listen((location) {
+        final lat = location.latitude;
+        final lon = location.longitude;
+        if (lat == null || lon == null) {
+          return;
+        }
+        _updateCenter(LatLng(lat, lon));
+      });
+
+      final current =
+          await locationService.getCurrent(timeout: const Duration(seconds: 5));
+      final lat = current?.latitude;
+      final lon = current?.longitude;
+      if (lat != null && lon != null) {
+        _updateCenter(LatLng(lat, lon));
+      }
+    } catch (_) {
+      // Ignore errors
+    }
+  }
+
+  void _stopLocationUpdates() {
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
+  }
+
+  void _updateCenter(LatLng center) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _currentCenter = center;
+    });
+    if (_mapReady) {
+      _mapController.move(center, _safeZoom());
+    }
+  }
+
+  double _safeZoom({double fallback = _homeZoom}) {
+    final zoom = _mapController.camera.zoom;
+    if (zoom.isFinite) {
+      return zoom;
+    }
+    return fallback;
   }
 
   Future<void> _startWalk() async {
@@ -198,6 +295,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final activeWalk = ref.watch(activeWalkNotifierProvider);
     final mapThemeId = ref.watch(mapThemeNotifierProvider);
     final mapTheme = mapThemeId.theme;
+    final center = _currentCenter ?? _fallbackCenter;
     
     // If active walk exists, change button label? Or just "Continue"? 
     // Spec says "Sanpo suru" button. If walk is active, maybe it should just go to the screen.
@@ -212,38 +310,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       body: Stack(
         children: [
           // Background Map
-           if (_currentCenter != null)
-            Positioned.fill(
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: _currentCenter!,
-                  initialZoom: 16,
-                  onMapReady: () {},
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: mapTheme.urlTemplate,
-                    subdomains: mapTheme.subdomains,
-                    userAgentPackageName: 'com.example.arukuPallarel',
-                  ),
-                  // Current location marker could be added here if we have a stream,
-                  // but for the home screen, maybe just a static map center or simple marker is enough for now?
-                  // The Plan said "FlutterMap implementation similar to WalkScreen (displaying current location)".
-                  // I'll add a simple marker at the center if we have location.
-                   MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _currentCenter!,
-                            width: 120,
-                            height: 120,
-                            child: const AppLocationMarker(),
-                          ),
-                        ],
-                      ),
-                ],
+          Positioned.fill(
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: center,
+                initialZoom: _homeZoom,
+                onMapReady: () {
+                  _mapReady = true;
+                  if (_currentCenter != null) {
+                    _mapController.move(_currentCenter!, _safeZoom());
+                  }
+                },
               ),
+              children: [
+                TileLayer(
+                  urlTemplate: mapTheme.urlTemplate,
+                  subdomains: mapTheme.subdomains,
+                  userAgentPackageName: 'com.example.arukuPallarel',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: center,
+                      width: 120,
+                      height: 120,
+                      child: const AppLocationMarker(),
+                    ),
+                  ],
+                ),
+              ],
             ),
+          ),
           
           // Map Attribution
           Positioned(

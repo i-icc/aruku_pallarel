@@ -12,16 +12,107 @@ import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../theme/app_styles.dart';
 import '../../widgets/app_background.dart';
 
+class ChatSheet extends HookConsumerWidget {
+  const ChatSheet({
+    super.key,
+    this.walkIdOverride,
+    this.readOnly = false,
+    this.onSuggestTap,
+  });
+
+  final String? walkIdOverride;
+  final bool readOnly;
+  final void Function(String suggestId)? onSuggestTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              _SheetHeader(
+                title: 'チャット',
+                titleStyle: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                onClose: () => Navigator.of(context).pop(),
+              ),
+              Expanded(
+                child: _ChatContent(
+                  walkIdOverride: walkIdOverride,
+                  readOnly: readOnly,
+                  scrollController: scrollController,
+                  listPadding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  onSuggestTap: onSuggestTap,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 @RoutePage()
 class ChatScreen extends HookConsumerWidget {
   const ChatScreen({
     super.key,
     this.walkIdOverride,
     this.readOnly = false,
+    this.onSuggestTap,
   });
 
   final String? walkIdOverride;
   final bool readOnly;
+  final void Function(String suggestId)? onSuggestTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Chat'),
+      ),
+      body: AppBackground(
+        safeAreaTop: false,
+        child: _ChatContent(
+          walkIdOverride: walkIdOverride,
+          readOnly: readOnly,
+          onSuggestTap: onSuggestTap,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatContent extends HookConsumerWidget {
+  const _ChatContent({
+    required this.walkIdOverride,
+    required this.readOnly,
+    this.scrollController,
+    this.listPadding = const EdgeInsets.fromLTRB(20, 16, 20, 32),
+    this.onSuggestTap,
+  });
+
+  final String? walkIdOverride;
+  final bool readOnly;
+  final ScrollController? scrollController;
+  final EdgeInsets listPadding;
+  final void Function(String suggestId)? onSuggestTap;
 
   static final _urlRegex = RegExp(
     r'https?://[^\s<>\[\]{}|\\^`"]+',
@@ -30,7 +121,8 @@ class ChatScreen extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final scrollController = useScrollController();
+    final internalController = useScrollController();
+    final activeController = scrollController ?? internalController;
     final shouldAutoScroll = useRef(true);
     final previousMessageCount = useRef(0);
     final messageKeys = useRef<Map<String, GlobalKey>>({});
@@ -51,17 +143,17 @@ class ChatScreen extends HookConsumerWidget {
 
     useEffect(() {
       void onScroll() {
-        if (!scrollController.hasClients) {
+        if (!activeController.hasClients) {
           return;
         }
         const threshold = 120.0;
         shouldAutoScroll.value =
-            scrollController.position.pixels < threshold;
+            activeController.position.pixels < threshold;
       }
 
-      scrollController.addListener(onScroll);
-      return () => scrollController.removeListener(onScroll);
-    }, [scrollController]);
+      activeController.addListener(onScroll);
+      return () => activeController.removeListener(onScroll);
+    }, [activeController]);
 
     useEffect(() {
       messagesAsync.whenData((messages) {
@@ -69,10 +161,10 @@ class ChatScreen extends HookConsumerWidget {
         final previousCount = previousMessageCount.value;
         if (currentCount > previousCount && shouldAutoScroll.value) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!scrollController.hasClients) {
+            if (!activeController.hasClients) {
               return;
             }
-            scrollController.animateTo(
+            activeController.animateTo(
               0,
               duration: const Duration(milliseconds: 280),
               curve: Curves.easeOut,
@@ -82,7 +174,7 @@ class ChatScreen extends HookConsumerWidget {
         previousMessageCount.value = currentCount;
       });
       return null;
-    }, [messagesAsync]);
+    }, [messagesAsync, activeController]);
 
     useEffect(() {
       final targetId = selectedSuggestId;
@@ -144,94 +236,142 @@ class ChatScreen extends HookConsumerWidget {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chat'),
-      ),
-      body: AppBackground(
-        safeAreaTop: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: walkId.isEmpty
-                  ? buildEmptyState(
-                      title: 'No active walk',
-                      subtitle: 'Start a walk to receive suggestions.',
-                    )
-                  : messagesAsync.when(
-                      data: (messages) {
-                        if (messages.isEmpty) {
-                          return buildEmptyState(
-                            title: isReadOnly
-                                ? 'No suggestions in this walk'
-                                : 'No suggestions yet',
-                            subtitle: isReadOnly
-                                ? 'Try another walk history.'
-                                : 'Keep walking to receive new ideas.',
-                          );
-                        }
+    void handleSuggestTap(String suggestId) {
+      if (onSuggestTap != null) {
+        onSuggestTap!(suggestId);
+        return;
+      }
+      ref
+          .read(selectedSuggestNotifierProvider.notifier)
+          .select(walkId, suggestId);
+    }
 
-                        return ListView.builder(
-                          controller: scrollController,
-                          reverse: true,
-                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final messageIndex = messages.length - 1 - index;
-                            final message = messages[messageIndex];
-                            final isSelected = message.suggestId != null &&
-                                message.suggestId == selectedSuggestId;
-                            final previewUrl = message.url ??
-                                extractUrl(message.message);
-                            final hasPreview = previewUrl != null &&
-                                AnyLinkPreview.isValidLink(previewUrl);
+    return Column(
+      children: [
+        Expanded(
+          child: walkId.isEmpty
+              ? buildEmptyState(
+                  title: 'No active walk',
+                  subtitle: 'Start a walk to receive suggestions.',
+                )
+              : messagesAsync.when(
+                  data: (messages) {
+                    if (messages.isEmpty) {
+                      return buildEmptyState(
+                        title: isReadOnly
+                            ? 'No suggestions in this walk'
+                            : 'No suggestions yet',
+                        subtitle: isReadOnly
+                            ? 'Try another walk history.'
+                            : 'Keep walking to receive new ideas.',
+                      );
+                    }
 
-                            return _ChatMessageBubble(
-                              key: keyForMessage(message),
-                              message: message,
-                              isSelected: isSelected,
-                              onTap: isReadOnly || message.suggestId == null
-                                  ? null
-                                  : () {
-                                      ref
-                                          .read(selectedSuggestNotifierProvider
-                                              .notifier)
-                                          .select(walkId, message.suggestId!);
-                                    },
-                              previewUrl: hasPreview ? previewUrl : null,
-                            );
-                          },
+                    return ListView.builder(
+                      controller: activeController,
+                      reverse: true,
+                      padding: listPadding,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final messageIndex = messages.length - 1 - index;
+                        final message = messages[messageIndex];
+                        final isSelected = message.suggestId != null &&
+                            message.suggestId == selectedSuggestId;
+                        final previewUrl = message.url ??
+                            extractUrl(message.message);
+                        final hasPreview = previewUrl != null &&
+                            AnyLinkPreview.isValidLink(previewUrl);
+
+                        return _ChatMessageBubble(
+                          key: keyForMessage(message),
+                          message: message,
+                          isSelected: isSelected,
+                          onTap: isReadOnly || message.suggestId == null
+                              ? null
+                              : () => handleSuggestTap(message.suggestId!),
+                          previewUrl: hasPreview ? previewUrl : null,
                         );
                       },
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      error: (error, _) => Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('Failed to load chat: $error'),
-                            const SizedBox(height: 12),
-                            OutlinedButton(
-                              onPressed: () => ref.invalidate(
-                                walkChatMessagesProvider(walkId),
-                              ),
-                              child: const Text('Retry'),
-                            ),
-                          ],
+                    );
+                  },
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  error: (error, _) => Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Failed to load chat: $error'),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: () => ref.invalidate(
+                            walkChatMessagesProvider(walkId),
+                          ),
+                          child: const Text('Retry'),
                         ),
-                      ),
+                      ],
                     ),
-            ),
-            _ChatFooter(
-              text: isReadOnly
-                  ? '過去の散歩の提案を閲覧しています。'
-                  : walkId.isEmpty
-                      ? 'Suggestions appear after you start a walk.'
-                      : 'Suggestions will appear automatically while you walk.',
-            ),
-          ],
+                  ),
+                ),
         ),
+        _ChatFooter(
+          text: isReadOnly
+              ? '過去の散歩の提案を閲覧しています。'
+              : walkId.isEmpty
+                  ? 'Suggestions appear after you start a walk.'
+                  : 'Suggestions will appear automatically while you walk.',
+        ),
+      ],
+    );
+  }
+}
+
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({
+    required this.title,
+    required this.onClose,
+    this.titleStyle,
+  });
+
+  final String title;
+  final TextStyle? titleStyle;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 60,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: 12,
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 8,
+            top: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: onClose,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          Positioned(
+            top: 28,
+            child: Text(
+              title,
+              style: titleStyle,
+            ),
+          ),
+        ],
       ),
     );
   }

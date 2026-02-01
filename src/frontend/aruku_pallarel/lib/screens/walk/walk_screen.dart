@@ -13,10 +13,12 @@ import 'package:location/location.dart';
 
 import '../../features/history/provider/walk_history_provider.dart';
 import '../../features/share/services/backend_exception.dart';
+import '../../features/walk/models/walk_chat_message.dart';
 import '../../features/walk/models/walk_session.dart';
 import '../../features/walk/models/walk_suggest.dart';
 import '../../features/walk/provider/active_walk_provider.dart';
 import '../../features/walk/provider/location_spoof_provider.dart';
+import '../../features/walk/provider/walk_chat_provider.dart';
 import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
@@ -32,12 +34,13 @@ import '../../widgets/app_floating_button.dart';
 import '../../widgets/map_attribution_sheet.dart';
 import '../../widgets/map_info_button.dart';
 
-import '../../router/app_router.dart';
+import '../chat/chat_screen.dart';
 import '../../features/walk/utils/map_utils.dart';
 import '../../features/walk/utils/route_smoother.dart';
 import 'widgets/walk_info_header.dart';
 import 'widgets/walk_notice.dart';
 import 'widgets/walk_suggest_pin.dart';
+import 'widgets/walk_suggest_popup.dart';
 import 'widgets/walk_map_layer.dart';
 import 'widgets/walk_bottom_overlay.dart';
 
@@ -84,6 +87,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   int? _spoofPointerId;
   Timer? _elapsedTimer;
   bool _showFinishConfirm = false;
+  String? _popupSuggestId;
 
   @override
   void initState() {
@@ -103,7 +107,15 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           return;
         }
         final nextId = next.suggestId;
-        if (nextId == null || nextId == previous?.suggestId) {
+        if (nextId == null) {
+          if (_popupSuggestId != null) {
+            setState(() {
+              _popupSuggestId = null;
+            });
+          }
+          return;
+        }
+        if (nextId == previous?.suggestId) {
           return;
         }
         _focusSelectedSuggest(nextId);
@@ -117,6 +129,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         if (next == null) {
           _latestSuggests = const [];
           _lastFocusedSuggestId = null;
+          _popupSuggestId = null;
           return;
         }
         if (previous?.walkId == next.walkId) {
@@ -124,6 +137,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         }
         _latestSuggests = const [];
         _lastFocusedSuggestId = null;
+        _popupSuggestId = null;
         _startTracking();
       },
     );
@@ -431,19 +445,53 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     return null;
   }
 
-  void _focusSelectedSuggest(String suggestId) {
-    if (_lastFocusedSuggestId == suggestId) {
+  void _focusSelectedSuggest(String suggestId, {bool force = false}) {
+    if (_lastFocusedSuggestId == suggestId && !force) {
       return;
     }
     final target = _findSuggestById(suggestId);
     if (target == null) {
       return;
     }
-    if (!_shouldAutoFocusSuggest()) {
+    if (!force && !_shouldAutoFocusSuggest()) {
       return;
     }
     _animateMapMove(target.position);
     _lastFocusedSuggestId = suggestId;
+  }
+
+  void _showSuggestPopup(String suggestId) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _popupSuggestId = suggestId;
+    });
+  }
+
+  void _clearSuggestSelection() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _popupSuggestId = null;
+    });
+    ref.read(selectedSuggestNotifierProvider.notifier).clear();
+  }
+
+  WalkChatMessage? _resolveSuggestMessage(
+    String? suggestId,
+    List<WalkChatMessage> messages,
+  ) {
+    if (suggestId == null || suggestId.isEmpty) {
+      return null;
+    }
+    for (final message in messages.reversed) {
+      if (message.suggestId == suggestId) {
+        return message;
+      }
+    }
+    return null;
   }
 
   void _maybeSelectLatestSuggest(String walkId, List<WalkSuggest> suggests) {
@@ -485,6 +533,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
             child: WalkSuggestPin(
               isSelected: suggest.suggestId == selectedSuggestId,
               onTap: () {
+                _showSuggestPopup(suggest.suggestId);
                 ref
                     .read(selectedSuggestNotifierProvider.notifier)
                     .select(walkId, suggest.suggestId);
@@ -493,6 +542,29 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           ),
         )
         .toList();
+  }
+
+  Marker? _buildSuggestPopupMarker({
+    required String? suggestId,
+    required WalkChatMessage? message,
+  }) {
+    if (suggestId == null || message == null) {
+      return null;
+    }
+    final target = _findSuggestById(suggestId);
+    if (target == null) {
+      return null;
+    }
+    return Marker(
+      point: target.position,
+      width: 240,
+      height: 140,
+      alignment: Alignment.topCenter,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: WalkSuggestPopup(message: message.message),
+      ),
+    );
   }
 
   void _startCompass() {
@@ -653,6 +725,18 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     _animateMapMove(latLng);
   }
 
+  void _handleChatSuggestTap(String suggestId) {
+    final walkId = ref.read(activeWalkNotifierProvider)?.walkId;
+    if (walkId == null) {
+      return;
+    }
+    _showSuggestPopup(suggestId);
+    ref
+        .read(selectedSuggestNotifierProvider.notifier)
+        .select(walkId, suggestId);
+    _focusSelectedSuggest(suggestId, force: true);
+  }
+
 
 
   @override
@@ -664,9 +748,14 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     final suggestsAsync = walkId == null
         ? const AsyncValue.data(<WalkSuggest>[])
         : ref.watch(walkSuggestListProvider(walkId));
+    final chatMessagesAsync = walkId == null
+        ? const AsyncValue.data(<WalkChatMessage>[])
+        : ref.watch(walkChatMessagesProvider(walkId));
     final selectedSuggestState = ref.watch(selectedSuggestNotifierProvider);
     final selectedSuggestId =
         selectedSuggestState.walkId == walkId ? selectedSuggestState.suggestId : null;
+    final chatMessages = chatMessagesAsync.valueOrNull ?? const <WalkChatMessage>[];
+    final popupMessage = _resolveSuggestMessage(_popupSuggestId, chatMessages);
     final mapThemeId = ref.watch(mapThemeNotifierProvider);
     final mapTheme = mapThemeId.theme;
     final spoofEnabled = spoofState.enabled;
@@ -717,6 +806,13 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
       loading: () => const <Marker>[],
       error: (error, stackTrace) => const <Marker>[],
     );
+    final popupMarker = _buildSuggestPopupMarker(
+      suggestId: _popupSuggestId,
+      message: popupMessage,
+    );
+    final markersForMap = popupMarker == null
+        ? suggestMarkers
+        : [...suggestMarkers, popupMarker];
 
     return Scaffold(
       body: Stack(
@@ -752,8 +848,12 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
                   urlTemplate: mapTheme.urlTemplate,
                   subdomains: mapTheme.subdomains,
                   routePoints: routePoints,
-                  suggestMarkers: suggestMarkers,
+                  suggestMarkers: markersForMap,
                   heading: _compassHeading ?? _movementHeading,
+                  onMapTap: (tapPosition, point) {
+                    _noteMapGesture();
+                    _clearSuggestSelection();
+                  },
                   onPointerDown: spoofEnabled ? _onSpoofPointerDown : null,
                   onPointerMove: spoofEnabled ? _onSpoofPointerMove : null,
                   onPointerUp: spoofEnabled ? _onSpoofPointerUp : null,
@@ -797,7 +897,16 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
               right: false,
               child: AppFloatingButton(
                 icon: Icons.chat,
-                onTap: () => context.router.push(ChatRoute()),
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => ChatSheet(
+                      onSuggestTap: _handleChatSuggestTap,
+                    ),
+                  );
+                },
               ),
             ),
           ),

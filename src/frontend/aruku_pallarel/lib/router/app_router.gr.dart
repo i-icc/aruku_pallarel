@@ -17,6 +17,7 @@ class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
     Key? key,
     String? walkIdOverride,
     bool readOnly = false,
+    void Function(String)? onSuggestTap,
     List<PageRouteInfo>? children,
   }) : super(
          ChatRoute.name,
@@ -24,6 +25,7 @@ class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
            key: key,
            walkIdOverride: walkIdOverride,
            readOnly: readOnly,
+           onSuggestTap: onSuggestTap,
          ),
          initialChildren: children,
        );
@@ -40,13 +42,19 @@ class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
         key: args.key,
         walkIdOverride: args.walkIdOverride,
         readOnly: args.readOnly,
+        onSuggestTap: args.onSuggestTap,
       );
     },
   );
 }
 
 class ChatRouteArgs {
-  const ChatRouteArgs({this.key, this.walkIdOverride, this.readOnly = false});
+  const ChatRouteArgs({
+    this.key,
+    this.walkIdOverride,
+    this.readOnly = false,
+    this.onSuggestTap,
+  });
 
   final Key? key;
 
@@ -54,9 +62,11 @@ class ChatRouteArgs {
 
   final bool readOnly;
 
+  final void Function(String)? onSuggestTap;
+
   @override
   String toString() {
-    return 'ChatRouteArgs{key: $key, walkIdOverride: $walkIdOverride, readOnly: $readOnly}';
+    return 'ChatRouteArgs{key: $key, walkIdOverride: $walkIdOverride, readOnly: $readOnly, onSuggestTap: $onSuggestTap}';
   }
 
   @override
