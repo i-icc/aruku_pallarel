@@ -41,6 +41,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final MapController _mapController = MapController();
   bool _walkLoading = false;
   LatLng? _currentCenter;
+  bool _isFallbackCenter = true;
   bool _showStartConfirm = false;
   bool _mapReady = false;
   StreamSubscription<LocationData>? _locationSubscription;
@@ -60,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           _stopLocationUpdates();
           final spoofLocation = next.location;
           if (spoofLocation != null) {
-            _updateCenter(spoofLocation);
+            _updateCenter(spoofLocation, isFallback: false);
           }
           return;
         }
@@ -91,7 +92,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Future<void> _fetchInitialLocation() async {
     final spoofState = ref.read(locationSpoofNotifierProvider);
     if (spoofState.enabled && spoofState.location != null) {
-      _updateCenter(spoofState.location!);
+      _updateCenter(spoofState.location!, isFallback: false);
       return;
     }
 
@@ -102,7 +103,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final lat = current?.latitude;
       final lon = current?.longitude;
       if (lat != null && lon != null) {
-        _updateCenter(LatLng(lat, lon));
+        _updateCenter(LatLng(lat, lon), isFallback: false);
         return;
       }
     } catch (_) {
@@ -111,9 +112,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final lastKnown = await _fetchLastKnownLocation();
     if (lastKnown != null) {
-      _updateCenter(lastKnown);
+      _updateCenter(lastKnown, isFallback: false);
     } else {
-      _updateCenter(_fallbackCenter);
+      if (!_hasActualCenter) {
+        _updateCenter(_fallbackCenter, isFallback: true);
+      }
     }
   }
 
@@ -136,7 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final spoofState = ref.read(locationSpoofNotifierProvider);
     if (spoofState.enabled) {
       if (spoofState.location != null) {
-        _updateCenter(spoofState.location!);
+        _updateCenter(spoofState.location!, isFallback: false);
       }
       return;
     }
@@ -162,7 +165,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         if (lat == null || lon == null) {
           return;
         }
-        _updateCenter(LatLng(lat, lon));
+        _updateCenter(LatLng(lat, lon), isFallback: false);
       });
 
       final current =
@@ -170,7 +173,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final lat = current?.latitude;
       final lon = current?.longitude;
       if (lat != null && lon != null) {
-        _updateCenter(LatLng(lat, lon));
+        _updateCenter(LatLng(lat, lon), isFallback: false);
       }
     } catch (_) {
       // Ignore errors
@@ -182,16 +185,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _locationSubscription = null;
   }
 
-  void _updateCenter(LatLng center) {
+  void _updateCenter(LatLng center, {required bool isFallback}) {
     if (!mounted) {
       return;
     }
     setState(() {
       _currentCenter = center;
+      _isFallbackCenter = isFallback;
     });
     if (_mapReady) {
       _mapController.move(center, _safeZoom());
     }
+  }
+
+  bool get _hasActualCenter {
+    return _currentCenter != null && !_isFallbackCenter;
   }
 
   double _safeZoom({double fallback = _homeZoom}) {
@@ -249,7 +257,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
          }
       }
 
-      startLocation ??= _fallbackCenter;
+      if (startLocation == null &&
+          _currentCenter != null &&
+          !_isFallbackCenter) {
+        startLocation = _currentCenter;
+      }
+
+      if (startLocation == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('現在地を取得できません。位置情報をオンにして少し待ってから再度お試しください。'),
+            ),
+          );
+        }
+        return;
+      }
 
       if (!mounted) return;
       
