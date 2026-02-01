@@ -85,14 +85,14 @@ flowchart TB
 ### 4. 位置情報収集
 - GIVEN: 散歩開始済み（フォアグラウンド/バックグラウンド）
 - WHEN:
-  - Locus で位置情報の更新を受信（distanceFilter: 15m）
+  - `location` で位置情報の更新を受信（distanceFilter: 15m）
 - THEN:
   - フォアグラウンド: Firestore に位置情報が追記される
-  - iOS バックグラウンド: Backend 取り込み経由で Firestore に反映され、条件が満たされれば提案リクエストが発行される
+  - iOS バックグラウンド: App が直接 Firestore に反映し、条件が満たされれば提案リクエストが発行される
   - 位置情報権限がない場合は許可の案内と設定画面への導線を表示する
 
 > **バックグラウンド動作**
-> - iOS: 「常に許可」の位置情報権限を取得し、Background Modes (location) を有効化
+> - iOS: 「常に許可」の位置情報権限を取得し、Background Modes (location) と `enableBackgroundMode` を有効化
 > - Android: Foreground Service + `ACCESS_BACKGROUND_LOCATION` 権限で通知バーに常駐
 
 ### 4.1 位置偽装（開発用）

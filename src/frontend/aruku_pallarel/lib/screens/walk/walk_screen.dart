@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:locus/locus.dart' as locus;
+import 'package:location/location.dart';
 
 
 import '../../features/history/provider/walk_history_provider.dart';
@@ -20,6 +20,7 @@ import '../../features/walk/provider/location_spoof_provider.dart';
 import '../../features/walk/provider/walk_suggestion_provider.dart';
 import '../../features/walk/provider/walk_location_recorder_provider.dart';
 import '../../features/walk/provider/walk_tracking_provider.dart';
+import '../../features/walk/services/location_service.dart';
 import '../../features/share/provider/overlay_loading_provider.dart';
 import '../../theme/app_styles.dart';
 import '../../theme/map_tiles.dart';
@@ -62,7 +63,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
   double? _compassHeading;
   double? _movementHeading;
   bool _mapReady = false;
-  StreamSubscription<locus.Location>? _locationSubscription;
+  StreamSubscription<LocationData>? _locationSubscription;
   StreamSubscription<CompassEvent>? _compassSubscription;
   ProviderSubscription<WalkSession?>? _activeWalkSubscription;
   ProviderSubscription<SelectedSuggestState>? _selectedSuggestSubscription;
@@ -157,22 +158,54 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     ref.read(overlayLoadingProvider.notifier).state = true;
 
     try {
-      await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
-      await ref
-          .read(walkLocationRecorderNotifierProvider.notifier)
-          .stopRecording();
-      await ref.read(walkTrackingNotifierProvider.notifier).stopTracking();
+      try {
+        await ref.read(activeWalkNotifierProvider.notifier).finishWalk();
+      } on BackendException catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+        return;
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('散歩の終了に失敗しました: $error')),
+        );
+        return;
+      }
+
+      final cleanupErrors = <String>[];
+      try {
+        await ref
+            .read(walkLocationRecorderNotifierProvider.notifier)
+            .stopRecording();
+      } catch (error) {
+        debugPrint('stopRecording failed: $error');
+        cleanupErrors.add('位置記録の停止');
+      }
+      try {
+        await ref.read(walkTrackingNotifierProvider.notifier).stopTracking();
+      } catch (error) {
+        debugPrint('stopTracking failed: $error');
+        cleanupErrors.add('位置追跡の停止');
+      }
       if (!mounted) {
         return;
+      }
+      if (cleanupErrors.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '散歩は終了しましたが、${cleanupErrors.join('、')}に失敗しました。',
+            ),
+          ),
+        );
       }
       context.router.pop();
-    } on BackendException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
     } finally {
       ref.read(overlayLoadingProvider.notifier).state = false;
       if (mounted) {
@@ -238,17 +271,19 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
         .startRecording(activeWalk.walkId);
     unawaited(_syncStoredLocations());
 
+    final locationService = ref.read(locationServiceProvider);
     await _locationSubscription?.cancel();
-    _locationSubscription = locus.Locus.location.stream.listen(
+    _locationSubscription = locationService.stream.listen(
       (location) {
         if (ref.read(locationSpoofNotifierProvider).enabled) {
           return;
         }
-        final coords = location.coords;
-        if (!coords.isValid) {
+        final lat = location.latitude;
+        final lon = location.longitude;
+        if (lat == null || lon == null) {
           return;
         }
-        final center = LatLng(coords.latitude, coords.longitude);
+        final center = LatLng(lat, lon);
         if (!mounted) {
           return;
         }
@@ -256,7 +291,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
           center,
           updateCenter: true,
           updateHeading: true,
-          heading: coords.heading,
+          heading: location.heading,
         );
         if (_mapReady) {
           _animateMapMove(center);
@@ -273,18 +308,17 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     );
 
     try {
-      final current = await locus.LocusLocation.getCurrentPosition(
-        timeout: 15,
-        maximumAge: 0,
-      );
-      final coords = current.coords;
-      if (coords.isValid && mounted) {
-        final center = LatLng(coords.latitude, coords.longitude);
+      final current =
+          await locationService.getCurrent(timeout: const Duration(seconds: 15));
+      final lat = current?.latitude;
+      final lon = current?.longitude;
+      if (lat != null && lon != null && mounted) {
+        final center = LatLng(lat, lon);
         _recordRoutePoint(
           center,
           updateCenter: true,
           updateHeading: true,
-          heading: coords.heading,
+          heading: current?.heading,
         );
         if (_mapReady) {
           _animateMapMove(center);
@@ -293,7 +327,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
     } catch (error) {
       if (mounted) {
         setState(() {
-          _locationError = 'getCurrentPosition failed: $error';
+          _locationError = 'getCurrent failed: $error';
         });
       }
     }
@@ -322,11 +356,19 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
 
   Future<LatLng?> _fetchLastKnownLocation() async {
     try {
-      final debugState = await locus.Locus.getState();
-      final location = debugState.location;
-      final coords = location?.coords;
-      if (coords != null && coords.isValid) {
-        return LatLng(coords.latitude, coords.longitude);
+      final service = ref.read(locationServiceProvider);
+      final last = service.lastLocation;
+      final lastLat = last?.latitude;
+      final lastLon = last?.longitude;
+      if (lastLat != null && lastLon != null) {
+        return LatLng(lastLat, lastLon);
+      }
+      final current =
+          await service.getCurrent(timeout: const Duration(seconds: 5));
+      final lat = current?.latitude;
+      final lon = current?.longitude;
+      if (lat != null && lon != null) {
+        return LatLng(lat, lon);
       }
     } catch (_) {}
     return null;
@@ -755,7 +797,7 @@ class _WalkScreenState extends ConsumerState<WalkScreen>
               right: false,
               child: AppFloatingButton(
                 icon: Icons.chat,
-                onTap: () => context.router.push(const ChatRoute()),
+                onTap: () => context.router.push(ChatRoute()),
               ),
             ),
           ),
@@ -1023,5 +1065,3 @@ class _MainButtonState {
   final bool isDestructive;
   final VoidCallback? onPressed;
 }
-
-

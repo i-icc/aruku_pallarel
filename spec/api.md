@@ -8,7 +8,7 @@
 - 失敗時は `{ "error": { "code": "...", "message": "..." } }` を返す
 
 > 位置情報の書き込みは基本的にクライアントから Firestore へ直接行う（MVP）。
-> iOS のバックグラウンド更新は Locus の同期で Backend 経由に切り替える場合がある。
+> iOS のバックグラウンド更新も `location` で継続し、必要に応じて Backend の `/locations:ingest` を利用する。
 
 ---
 

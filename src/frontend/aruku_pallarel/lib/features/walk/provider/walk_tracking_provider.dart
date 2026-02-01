@@ -1,6 +1,10 @@
-import 'package:locus/locus.dart' as locus;
+import 'dart:io';
+
+import 'package:location/location.dart';
 import 'package:permission_handler/permission_handler.dart' as permission;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../services/location_service.dart';
 
 part 'walk_tracking_provider.g.dart';
 
@@ -17,6 +21,7 @@ class WalkTrackingState {
     this.locationText,
     this.whenInUseGranted,
     this.alwaysGranted,
+    this.backgroundSyncEnabled = false,
   });
 
   final bool permissionGranted;
@@ -30,6 +35,7 @@ class WalkTrackingState {
   final String? locationText;
   final bool? whenInUseGranted;
   final bool? alwaysGranted;
+  final bool backgroundSyncEnabled;
 
   WalkTrackingState copyWith({
     bool? permissionGranted,
@@ -43,6 +49,7 @@ class WalkTrackingState {
     String? locationText,
     bool? whenInUseGranted,
     bool? alwaysGranted,
+    bool? backgroundSyncEnabled,
   }) {
     return WalkTrackingState(
       permissionGranted: permissionGranted ?? this.permissionGranted,
@@ -56,6 +63,8 @@ class WalkTrackingState {
       locationText: locationText ?? this.locationText,
       whenInUseGranted: whenInUseGranted ?? this.whenInUseGranted,
       alwaysGranted: alwaysGranted ?? this.alwaysGranted,
+      backgroundSyncEnabled:
+          backgroundSyncEnabled ?? this.backgroundSyncEnabled,
     );
   }
 }
@@ -63,10 +72,11 @@ class WalkTrackingState {
 @Riverpod(keepAlive: true)
 class WalkTrackingNotifier extends _$WalkTrackingNotifier {
   static const double _distanceFilterMeters = 15;
-  bool _ready = false;
 
   @override
-  WalkTrackingState build() => const WalkTrackingState();
+  WalkTrackingState build() {
+    return const WalkTrackingState();
+  }
 
   Future<bool> startTracking() async {
     if (state.isTracking) {
@@ -87,31 +97,34 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
         return false;
       }
 
-      if (!_ready) {
-        await locus.Locus.ready(
-          locus.ConfigPresets.balanced.copyWith(
-            distanceFilter: _distanceFilterMeters,
-            autoSync: false,
-            batchSync: false,
-            stopOnTerminate: false,
-            enableHeadless: true,
-            persistMode: locus.PersistMode.location,
-            maxDaysToPersist: 7,
-            maxRecordsToPersist: 200,
-            notification: const locus.NotificationConfig(
-              title: 'Walk tracking',
-              text: 'Tracking location in the background',
-            ),
-          ),
+      final locationService = ref.read(locationServiceProvider);
+      final serviceEnabled = await locationService.ensureServiceEnabled();
+      if (!serviceEnabled) {
+        state = state.copyWith(
+          permissionGranted: true,
+          isTracking: false,
+          isRequesting: false,
+          serviceEnabled: false,
         );
-        _ready = true;
+        await _refreshDebugState();
+        return false;
       }
 
-      await locus.Locus.start();
+      await locationService.configure(
+        distanceFilterMeters: _distanceFilterMeters,
+        accuracy: LocationAccuracy.balanced,
+      );
+      var backgroundEnabled = false;
+      if (Platform.isIOS) {
+        backgroundEnabled =
+            await locationService.enableBackgroundMode(enable: true);
+      }
+
       state = state.copyWith(
         permissionGranted: true,
         isTracking: true,
         isRequesting: false,
+        backgroundSyncEnabled: backgroundEnabled,
       );
       await _refreshDebugState();
       return true;
@@ -130,10 +143,23 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
     if (!state.isTracking) {
       return;
     }
+    String? errorMessage;
     try {
-      await locus.Locus.stop();
+      if (Platform.isIOS) {
+        try {
+          await ref
+              .read(locationServiceProvider)
+              .enableBackgroundMode(enable: false);
+        } catch (error) {
+          errorMessage ??= 'background mode stop failed: $error';
+        }
+      }
     } finally {
-      state = state.copyWith(isTracking: false);
+      state = state.copyWith(
+        isTracking: false,
+        backgroundSyncEnabled: false,
+        errorMessage: errorMessage,
+      );
       await _refreshDebugState();
     }
   }
@@ -165,23 +191,22 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
 
   Future<void> _refreshDebugState() async {
     try {
-      final serviceStatus = await permission.Permission.location.serviceStatus;
-      final serviceEnabled =
-          serviceStatus == permission.ServiceStatus.enabled;
-      final debug = await locus.Locus.getState();
-      final location = debug.location;
-      final hasLocation = location != null && location.coords.isValid;
+      final locationService = ref.read(locationServiceProvider);
+      final serviceEnabled = await locationService.isServiceEnabled();
+      final status = await locationService.permissionStatus();
+      final location = locationService.lastLocation;
+      final lat = location?.latitude;
+      final lon = location?.longitude;
+      final hasLocation = lat != null && lon != null;
       final locationText = hasLocation
-          ? '${location.coords.latitude.toStringAsFixed(5)},'
-              '${location.coords.longitude.toStringAsFixed(5)}'
+          ? '${lat.toStringAsFixed(5)},${lon.toStringAsFixed(5)}'
           : null;
       state = state.copyWith(
         debugState: 'service=${serviceEnabled ? 'on' : 'off'}, '
-            'enabled=${debug.enabled}, '
-            'isMoving=${debug.isMoving}, '
+            'permission=$status, '
             'location=${locationText ?? 'none'}',
         serviceEnabled: serviceEnabled,
-        isMoving: debug.isMoving,
+        isMoving: null,
         hasLocation: hasLocation,
         locationText: locationText,
       );
@@ -195,4 +220,5 @@ class WalkTrackingNotifier extends _$WalkTrackingNotifier {
       );
     }
   }
+
 }
