@@ -12,18 +12,65 @@ part of 'app_router.dart';
 
 /// generated route for
 /// [ChatScreen]
-class ChatRoute extends PageRouteInfo<void> {
-  const ChatRoute({List<PageRouteInfo>? children})
-    : super(ChatRoute.name, initialChildren: children);
+class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
+  ChatRoute({
+    Key? key,
+    String? walkIdOverride,
+    bool readOnly = false,
+    List<PageRouteInfo>? children,
+  }) : super(
+         ChatRoute.name,
+         args: ChatRouteArgs(
+           key: key,
+           walkIdOverride: walkIdOverride,
+           readOnly: readOnly,
+         ),
+         initialChildren: children,
+       );
 
   static const String name = 'ChatRoute';
 
   static PageInfo page = PageInfo(
     name,
     builder: (data) {
-      return const ChatScreen();
+      final args = data.argsAs<ChatRouteArgs>(
+        orElse: () => const ChatRouteArgs(),
+      );
+      return ChatScreen(
+        key: args.key,
+        walkIdOverride: args.walkIdOverride,
+        readOnly: args.readOnly,
+      );
     },
   );
+}
+
+class ChatRouteArgs {
+  const ChatRouteArgs({this.key, this.walkIdOverride, this.readOnly = false});
+
+  final Key? key;
+
+  final String? walkIdOverride;
+
+  final bool readOnly;
+
+  @override
+  String toString() {
+    return 'ChatRouteArgs{key: $key, walkIdOverride: $walkIdOverride, readOnly: $readOnly}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! ChatRouteArgs) return false;
+    return key == other.key &&
+        walkIdOverride == other.walkIdOverride &&
+        readOnly == other.readOnly;
+  }
+
+  @override
+  int get hashCode =>
+      key.hashCode ^ walkIdOverride.hashCode ^ readOnly.hashCode;
 }
 
 /// generated route for

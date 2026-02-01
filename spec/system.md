@@ -71,10 +71,10 @@ flowchart TB
 4. Backend → App: walkId 返却
 
 ### 位置更新
-1. App は Locus の位置更新ストリームを購読する（distanceFilter: 15m）
-2. フォアグラウンドは App から Firestore の `locations` に追記
-3. iOS バックグラウンド時は Locus の同期で Backend の `/locations:ingest` に送信
-4. Backend が Firestore の `locations` に追記し、条件を満たせば提案リクエストを発行
+1. App は `location` プラグインの位置更新ストリームを購読する（distanceFilter: 15m）
+2. フォアグラウンド/バックグラウンドとも App から Firestore の `locations` に追記
+3. iOS バックグラウンドは Background Modes (location) + `enableBackgroundMode` で継続
+4. 条件を満たせば App が提案リクエストを発行
 
 ### 履歴/提案の閲覧
 1. App は Firestore から `walks` / `suggests` / `chat` を読み取る
