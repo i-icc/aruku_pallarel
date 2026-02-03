@@ -189,6 +189,30 @@ class SettingsSheet extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 16),
+                    AppCard(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        children: [
+                          const _SectionHeader(
+                            icon: Icons.info_outline,
+                            title: 'ライセンス',
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            title: const Text('オープンソースライセンス'),
+                            subtitle: const Text('使用しているライブラリのライセンスを表示します。'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              showLicensePage(
+                                context: context,
+                                applicationName: 'あるくパラレル',
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     AppPrimaryButton(
                       label: 'Sign Out',
