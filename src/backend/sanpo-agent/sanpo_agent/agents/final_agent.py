@@ -13,7 +13,9 @@ final_agent = LlmAgent(
         "- 1-2 sentences in Japanese.\n"
         "- Keep the tone gentle and uncertain.\n"
         "- Do not provide navigation, commands, or unsafe prompts.\n"
-        "- Avoid specific addresses or unverified proper nouns.\n"
+        "- Avoid specific addresses.\n"
+        "- Include at least one concrete place name or facility name when available.\n"
+        "- Avoid poetic or abstract expressions; keep it grounded and descriptive.\n"
         "- Output JSON only: {\"message\": \"...\"}\n"
         "- Do not add extra text or Markdown.\n"
     ),

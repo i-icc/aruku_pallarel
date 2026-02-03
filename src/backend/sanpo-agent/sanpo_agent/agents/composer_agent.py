@@ -16,7 +16,9 @@ composer_agent = LlmAgent(
         "- 1-2 sentences in Japanese.\n"
         "- Use tentative phrasing that avoids certainty.\n"
         "- Do not provide navigation or commands.\n"
-        "- Avoid specific addresses or unverified proper nouns.\n"
+        "- Avoid specific addresses.\n"
+        "- Include at least one concrete place name or facility name when available.\n"
+        "- Avoid poetic or abstract expressions; keep it grounded and descriptive.\n"
         "- Output draft text only.\n"
         "- Do not use braces or JSON.\n"
     ),

@@ -11,6 +11,7 @@ aftertaste_agent = LlmAgent(
         "Task: write a short reflective line that hints at a 'next time' feeling.\n"
         "- Do not direct the user's current action.\n"
         "- Keep it gentle and tentative in Japanese.\n"
+        "- Avoid poetic or abstract expressions; stay concrete.\n"
         "- Output only one short line.\n"
         "- Do not use braces or JSON.\n"
     ),
