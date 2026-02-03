@@ -10,6 +10,7 @@ texture_agent = LlmAgent(
         "Input is a JSON text that includes latitude and longitude.\n"
         "Task: write a short sensory cue (light, wind, sound, shadow) in Japanese.\n"
         "- Keep it subtle and tentative.\n"
+        "- Avoid poetic or abstract expressions; stay concrete.\n"
         "- Output only one short line.\n"
         "- Do not use braces or JSON.\n"
     ),
