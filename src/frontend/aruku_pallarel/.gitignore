@@ -46,3 +46,8 @@ app.*.map.json
 
 # Firebase (Android is out of scope)
 /android/app/google-services.json
+/ios/Runner/GoogleService-Info.plist
+/lib/firebase_options.dart
+
+# Code generation
+/lib/**/*.g.dart

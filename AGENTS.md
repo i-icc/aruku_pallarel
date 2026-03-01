@@ -33,3 +33,4 @@
 - チャットはハーフモーダル表示とし、メッセージ/ピンの相互フォーカスとポップアップ表示を行う（`spec/ux.md` 準拠）
 - ピンのメッセージポップアップはマップの他の場所タップで閉じる（`spec/ux.md` 準拠）
 - ホーム画面は現在地を継続更新し、初期ズームを少し近めに設定する（`spec/ux.md` 準拠）
+- フロントエンドの Firebase 設定ファイル（`ios/Runner/GoogleService-Info.plist`, `lib/firebase_options.dart`）と `lib/**/*.g.dart` は git 管理しない

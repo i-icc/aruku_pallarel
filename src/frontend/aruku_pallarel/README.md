@@ -14,8 +14,8 @@ A few resources to get you started if this is your first Flutter project:
 Flutter/Dart のコマンドは必ず `fvm` 経由で実行する。
 
 ## Firebase/FCM (iOS) セットアップ
-- `ios/Runner/GoogleService-Info.plist` を配置（git 管理可）
-- FlutterFire CLI で `flutterfire configure` を実行し、`lib/firebase_options.dart` を生成（git 管理可）
+- `ios/Runner/GoogleService-Info.plist` をローカルに配置（git 管理しない）
+- FlutterFire CLI で `flutterfire configure` を実行し、`lib/firebase_options.dart` をローカル生成（git 管理しない）
 - APNs 認証キー (`.p8`) は git 管理しない
 - Xcode の Runner ターゲットで Push Notifications / Background Modes (Remote notifications) を有効化
 - Firebase コンソールの Cloud Messaging で APNs Key を登録
